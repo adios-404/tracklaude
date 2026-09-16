@@ -9,12 +9,13 @@ public enum MenuBarText {
     static let noWindow = "—"
 
     /// - Parameters:
-    ///   - fiveHour: the 5-hour Window, or `nil` when Anthropic reports none.
+    ///   - window: the Window to show — the 5-hour one in the menu bar — or `nil` when
+    ///     Anthropic reports none.
     ///   - remaining: show `100 − utilization` instead of the Utilization.
-    public static func render(fiveHour: Window?, remaining: Bool, now: Date) -> String {
-        guard let fiveHour else { return noWindow }
-        let percent = Int((remaining ? 100 - fiveHour.utilization : fiveHour.utilization).rounded())
-        guard let reset = fiveHour.resetsAt else { return "\(percent)%" }
+    public static func render(window: Window?, remaining: Bool, now: Date) -> String {
+        guard let window else { return noWindow }
+        let percent = Int((remaining ? 100 - window.utilization : window.utilization).rounded())
+        guard let reset = window.resetsAt else { return "\(percent)%" }
         return "\(percent)% · \(TimeToReset.format(reset: reset, now: now))"
     }
 }

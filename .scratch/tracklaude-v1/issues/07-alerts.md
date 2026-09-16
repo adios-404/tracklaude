@@ -11,3 +11,10 @@
 - [ ] Toggle persists in UserDefaults; off means no permission request and no delivery
 - [ ] Permission denied state is visible in the popover with a link to System Settings › Notifications
 - [ ] Manual check: with a fixture-driven build or a real crossing, a notification appears once
+
+## Comments
+
+**2026-09-16 — handoff from ticket 03.** Anthropic's `resets_at` jitters sub-second on every
+response (`.83`, `.08`, `.51` seen for one Reset). The decoder truncates to the second, but treat
+a cycle as new only when the Reset moves by more than a tolerance (a minute), never on exact
+inequality.

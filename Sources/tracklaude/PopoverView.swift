@@ -46,7 +46,7 @@ struct PopoverView: View {
         HStack {
             Text(name)
             Spacer()
-            Text(MenuBarText.render(fiveHour: window, remaining: false, now: Date()))
+            Text(MenuBarText.render(window: window, remaining: false, now: Date()))
                 .monospacedDigit()
         }
     }

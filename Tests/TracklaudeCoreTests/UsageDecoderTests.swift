@@ -3,9 +3,9 @@ import Testing
 import TracklaudeCore
 
 private let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
-// The recorded Resets, 2026-09-16T20:00:00.83Z and 2026-09-17T03:00:00.83Z, rounded to the second.
-private let fiveHourReset = Date(timeIntervalSince1970: 1_789_588_801)
-private let sevenDayReset = Date(timeIntervalSince1970: 1_789_614_001)
+// The recorded Resets, 2026-09-16T20:00:00.83Z and 2026-09-17T03:00:00.83Z, truncated to the second.
+private let fiveHourReset = Date(timeIntervalSince1970: 1_789_588_800)
+private let sevenDayReset = Date(timeIntervalSince1970: 1_789_614_000)
 
 @Test("a real response yields the 5-hour and 7-day Windows, the reported per-model Window, and the fetch time")
 func normalResponse() throws {
@@ -17,7 +17,7 @@ func normalResponse() throws {
     // Anthropic reported this one at 0% with a Reset, so it is a real (if idle) Window.
     // Its resets_at has no fractional seconds — the parser must accept both forms.
     #expect(snapshot.perModel == [
-        ModelWindow(model: "Fable", window: Window(utilization: 0, resetsAt: Date(timeIntervalSince1970: 1_789_614_000))),
+        ModelWindow(model: "Fable", window: Window(utilization: 0, resetsAt: sevenDayReset)),
     ])
 }
 
@@ -55,13 +55,7 @@ func allNullResponse() throws {
 
 @Test("unknown keys and an unknown limit kind are ignored")
 func unknownKeysIgnored() throws {
-    let body = Data(#"""
-    {"five_hour":{"utilization":5,"resets_at":"2026-09-16T18:00:00Z","surprise":1},
-     "brand_new_window":{"utilization":99},
-     "limits":[{"kind":"monthly_mystery","percent":50,"scope":{"model":{"display_name":"Haiku"}}}]}
-    """#.utf8)
-
-    let snapshot = try UsageDecoder.decode(body, fetchedAt: fetchedAt)
+    let snapshot = try UsageDecoder.decode(try Fixture.body("usage-unknown-keys.http"), fetchedAt: fetchedAt)
 
     #expect(snapshot.fiveHour == Window(utilization: 5, resetsAt: Date(timeIntervalSince1970: 1_789_581_600)))
     #expect(snapshot.perModel.isEmpty)

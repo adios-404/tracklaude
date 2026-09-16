@@ -23,3 +23,4 @@ per-model Window, no legacy-field data, no null day, and no 5xx to record):
 | `usage-legacy-per-model.http` | Same, with `limits[]` removed. |
 | `usage-all-null.http` | Every Window and `limits[]` null. |
 | `usage-5xx.http` | 503 in the same error envelope the real 429 used. |
+| `usage-unknown-keys.http` | Hand-written: unknown keys everywhere and an unknown `limits[].kind`. |

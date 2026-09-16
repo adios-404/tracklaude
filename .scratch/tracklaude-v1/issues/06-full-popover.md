@@ -10,3 +10,11 @@
 - [ ] Remaining mode inverts percentages everywhere and is stored in UserDefaults
 - [ ] Layout reviewed at the default popover width with 2, 3 and 5 rows — no truncation, no overflow
 - [ ] All-null Snapshot renders a single "No usage windows reported" row rather than an empty popover
+
+## Comments
+
+**2026-09-16 — handoff from ticket 03.** `Snapshot.perModel` is already sorted by model name.
+The real account reports a `Fable` per-model Window at 0 % with `is_active: false`; the decoder
+does not read `is_active` yet — add it if you decide inactive 0 % rows should hide. `PopoverView`
+holds a placeholder readout to delete. `MenuBarText.render(window:remaining:now:)` is the
+per-Window text builder you can reuse for row percentages.

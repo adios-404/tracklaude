@@ -15,7 +15,7 @@ struct TracklaudeApp: App {
                 Image(systemName: "gauge.with.dots.needle.bottom.50percent")
                 // "remaining" mode and a ticking `now` arrive with the popover toggle (06)
                 // and the poll timer (04); until then the label re-renders per Snapshot.
-                Text(MenuBarText.render(fiveHour: model.snapshot?.fiveHour, remaining: false, now: Date()))
+                Text(MenuBarText.render(window: model.snapshot?.fiveHour, remaining: false, now: Date()))
             }
         }
         .menuBarExtraStyle(.window)

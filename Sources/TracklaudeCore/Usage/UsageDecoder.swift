@@ -110,12 +110,14 @@ public enum UsageDecoder {
 }
 
 /// `resets_at` arrives as ISO-8601 with fractional seconds; accept it without them too.
-/// Rounded to the whole second: sub-second Reset precision means nothing to a `2h14m` readout.
+/// Truncated to the whole second: sub-second Reset precision means nothing to a `2h14m`
+/// readout, and the fraction jitters between responses (observed 2026-09-16: `.83`, `.08`,
+/// `.51` for the same Reset), so it must never be part of a Window's identity.
 enum ISO8601 {
     static func parse(_ text: String) -> Date? {
         let style = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
         let plain = Date.ISO8601FormatStyle()
         guard let date = (try? style.parse(text)) ?? (try? plain.parse(text)) else { return nil }
-        return Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded())
+        return Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down))
     }
 }

@@ -12,3 +12,13 @@
 - [ ] 401 path tested: refresh succeeds → retry succeeds; refresh fails → sessionExpired; token rotation persisted
 - [ ] Popover banner text for each reason is exact and a single button performs the right action
 - [ ] Manual check: turn Wi-Fi off → menu bar dims with `offline` within 30 s; turn on → recovers within 30 s
+
+## Comments
+
+**2026-09-16 — handoff from ticket 03.** `UsageFetchError` already separates `unauthorized`,
+`rateLimited(retryAfter:)`, `serverError(status:)`, `undecodable(status:)`, `unexpectedStatus`;
+map the last three to `.serverError`. `OAuthRefresh.refresh` throws `OAuthTokenError.httpStatus(400)`
+for a dead Credential (`invalid_grant`); today `AppModel.restoreCredential` shows that as
+"Sign-in failed" with an HTTP-status string — the spec wants a plain "session expired, sign in
+again" (refresh tokens die after ~7 days idle). The recorded `usage-429.http` carries
+`Retry-After: 300`; honour it over the 60 s first step.

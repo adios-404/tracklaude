@@ -66,11 +66,21 @@ func fetchReports5xx() async throws {
     }
 }
 
-@Test("an HTML body, whatever the status, is reported as undecodable")
-func fetchReportsHTMLBody() async throws {
+@Test("Cloudflare's HTML challenge page arrives as a 403 and is reported by that status")
+func fetchReportsHTMLChallengeByStatus() async throws {
     let transport = FakeTransport(replying: try Fixture.response("usage-html.http"))
 
-    await #expect(throws: UsageFetchError.undecodable(status: 403)) {
+    await #expect(throws: UsageFetchError.unexpectedStatus(403)) {
+        try await UsageFetch.perform(accessToken: "T", transport: transport, now: now)
+    }
+}
+
+@Test("an HTML body under a 200 is reported as undecodable")
+func fetchReportsHTMLBodyAt200() async throws {
+    let html = try Fixture.body("usage-html.http")
+    let transport = FakeTransport(replying: HTTPResponse(status: 200, headers: ["Content-Type": "text/html"], body: html))
+
+    await #expect(throws: UsageFetchError.undecodable(status: 200)) {
         try await UsageFetch.perform(accessToken: "T", transport: transport, now: now)
     }
 }
@@ -80,6 +90,16 @@ func fetchReports200WithBadBody() async throws {
     let transport = FakeTransport(replying: .json(status: 200, "[]"))
 
     await #expect(throws: UsageFetchError.undecodable(status: 200)) {
+        try await UsageFetch.perform(accessToken: "T", transport: transport, now: now)
+    }
+}
+
+@Test("any other non-2xx is reported as unexpected, never decoded into an empty Snapshot")
+func fetchReportsOtherNon2xx() async throws {
+    // The same JSON envelope the real 429 used, under a status the app has no rule for.
+    let transport = FakeTransport(replying: .json(status: 403, #"{"error":{"type":"permission_error","message":"Forbidden"}}"#))
+
+    await #expect(throws: UsageFetchError.unexpectedStatus(403)) {
         try await UsageFetch.perform(accessToken: "T", transport: transport, now: now)
     }
 }

@@ -1,0 +1,4 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"five_hour":{"utilization":5,"resets_at":"2026-09-16T18:00:00Z","surprise":1},"brand_new_window":{"utilization":99},"limits":[{"kind":"monthly_mystery","percent":50,"scope":{"model":{"display_name":"Haiku"}}}]}

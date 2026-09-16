@@ -12,3 +12,13 @@
 - [ ] Refresh button fetches immediately and is disabled for 5 s afterwards
 - [ ] No fetch is ever issued while signed out
 - [ ] Running the app for 10 minutes shows fetches at 30 s intervals (observed via the log, credential redacted)
+
+## Comments
+
+**2026-09-16 — handoff from ticket 03.** `UsageFetch.perform(accessToken:transport:now:)` does
+one classified fetch; `AppModel.fetchUsage()` calls it once after restore/sign-in. The endpoint
+reflects new usage at ≤ 10 s, so 30 s stands. Rate limit is per access token, roughly 50
+requests per rolling 10 minutes, `Retry-After: 300` on a 429 — your 10-minute run should see no
+429 at 30 s; if it does, the budget is smaller than measured. The menu-bar label currently
+renders with `Date()` at SwiftUI render time and only re-renders when the Snapshot changes, so
+Time-to-Reset goes stale between polls until your timer drives `now`.

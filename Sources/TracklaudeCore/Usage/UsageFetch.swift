@@ -10,6 +10,9 @@ public enum UsageFetchError: Error, Equatable, Sendable, LocalizedError {
     case serverError(status: Int)
     /// Any status whose body is not the usage shape (HTML challenge pages included).
     case undecodable(status: Int)
+    /// A non-2xx the app has no rule for (403, 404, …). Never decoded: a JSON error
+    /// envelope would otherwise pass the lenient decoder as an empty Snapshot and show `—`.
+    case unexpectedStatus(Int)
 
     public var errorDescription: String? {
         switch self {
@@ -17,6 +20,7 @@ public enum UsageFetchError: Error, Equatable, Sendable, LocalizedError {
         case .rateLimited: return "Anthropic is rate-limiting usage checks."
         case .serverError(let status): return "Anthropic's usage service returned HTTP \(status)."
         case .undecodable(let status): return "Anthropic's usage reply (HTTP \(status)) was not in the expected format."
+        case .unexpectedStatus(let status): return "Anthropic's usage service answered HTTP \(status)."
         }
     }
 }
@@ -49,12 +53,14 @@ public enum UsageFetch {
             throw UsageFetchError.rateLimited(retryAfter: retryAfter(in: response.headers))
         case 500...599:
             throw UsageFetchError.serverError(status: response.status)
-        default:
+        case 200..<300:
             do {
                 return try UsageDecoder.decode(response.body, fetchedAt: now)
             } catch {
                 throw UsageFetchError.undecodable(status: response.status)
             }
+        default:
+            throw UsageFetchError.unexpectedStatus(response.status)
         }
     }
 
