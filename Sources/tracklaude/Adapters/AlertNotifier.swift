@@ -1,5 +1,4 @@
 import Foundation
-import os
 import TracklaudeCore
 import UserNotifications
 
@@ -22,7 +21,7 @@ final class AlertNotifier {
     /// `nil` outside an app bundle, where `UNUserNotificationCenter.current()` traps.
     private let center: UNUserNotificationCenter?
     private let presenter = ForegroundPresenter()
-    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "tracklaude", category: "alerts")
+    private static let log = AppLog(category: "alerts")
 
     init() {
         // Why: the notification center needs a bundle proxy for the process; a bare
@@ -42,7 +41,7 @@ final class AlertNotifier {
             center.requestAuthorization(options: [.alert, .sound]) { _, error in continuation.resume(returning: error) }
         }
         if let failure {
-            Self.log.error("Notification permission request failed: \(failure.localizedDescription, privacy: .public)")
+            Self.log.error("Notification permission request failed: \(failure.localizedDescription)")
         }
         return await permission()
     }
@@ -71,9 +70,9 @@ final class AlertNotifier {
             center.add(request) { error in continuation.resume(returning: error) }
         }
         if let failure {
-            Self.log.error("Could not deliver \(alert.title, privacy: .public): \(failure.localizedDescription, privacy: .public)")
+            Self.log.error("Could not deliver \(alert.title): \(failure.localizedDescription)")
         } else {
-            Self.log.notice("Delivered: \(alert.title, privacy: .public)")
+            Self.log.notice("Delivered: \(alert.title)")
         }
     }
 }

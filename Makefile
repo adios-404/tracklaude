@@ -32,7 +32,7 @@ else
                 -Xswiftc -Xfrontend -Xswiftc -disable-cross-import-overlays
 endif
 
-.PHONY: all build test bundle sign install run clean
+.PHONY: all build test bundle sign install run clean trust
 
 all: build
 
@@ -68,3 +68,11 @@ run: install
 
 clean:
 	rm -rf .build "$(DIST_DIR)"
+
+# The trust guarantees the README promises, enforced rather than asserted (ticket 09):
+# every log line is redacted, the binary names only Anthropic hosts, the signed app
+# carries the minimum entitlements. Same scripts CI runs; run this before a release.
+trust: sign
+	sh Scripts/check-log-redaction.sh
+	sh Scripts/check-hostnames.sh "$(BUILD_DIR)/$(APP_NAME)"
+	sh Scripts/check-entitlements.sh "$(APP)"

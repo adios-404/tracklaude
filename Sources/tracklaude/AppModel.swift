@@ -1,6 +1,5 @@
 import AppKit
 import Observation
-import os
 import TracklaudeCore
 
 @Observable
@@ -179,7 +178,7 @@ final class AppModel {
         if trigger == .manualRefresh { lastManualRefresh = issuedAt }
         fetchGeneration += 1
         let generation = fetchGeneration
-        Self.pollLog.notice("Usage fetch issued (\(String(describing: trigger), privacy: .public))")
+        Self.pollLog.notice("Usage fetch issued (\(String(describing: trigger)))")
         fetchTask = Task {
             await fetchUsage(issuedAt: issuedAt)
             guard generation == fetchGeneration else { return }
@@ -203,7 +202,7 @@ final class AppModel {
         // its result must not drag the app back into a signed-in state.
         guard state.isSignedIn else { return }
         if case .failed(let failure) = result {
-            Self.pollLog.error("Usage fetch failed: \(String(describing: failure), privacy: .public)")
+            Self.pollLog.error("Usage fetch failed: \(String(describing: failure))")
         }
         if case .snapshot(let fresh) = result {
             let decision = AlertDecision.decide(previous: alertState, snapshot: fresh)
@@ -230,7 +229,7 @@ final class AppModel {
 
     private func record(permission: AlertPermission) {
         if permission != alertPermission {
-            Self.alertLog.notice("Notification permission: \(String(describing: permission), privacy: .public)")
+            Self.alertLog.notice("Notification permission: \(String(describing: permission))")
         }
         alertPermission = permission
     }
@@ -240,7 +239,7 @@ final class AppModel {
     private func deliver(_ alerts: [Alert]) {
         guard alertsEnabled, !alerts.isEmpty else { return }
         for alert in alerts {
-            Self.alertLog.notice("Alert: \(alert.title, privacy: .public)")
+            Self.alertLog.notice("Alert: \(alert.title)")
         }
         delivery = Task { [previous = delivery, permissionRequest] in
             await previous?.value
@@ -252,7 +251,7 @@ final class AppModel {
             guard !Task.isCancelled else { return }
             record(permission: await notifier.permission())
             guard alertsEnabled, alertPermission == .granted else {
-                Self.alertLog.notice("Not delivered: permission \(String(describing: self.alertPermission), privacy: .public)")
+                Self.alertLog.notice("Not delivered: permission \(String(describing: self.alertPermission))")
                 return
             }
             for alert in alerts { await notifier.deliver(alert) }
@@ -268,7 +267,7 @@ final class AppModel {
         do {
             try loginItem.setEnabled(enabled)
         } catch {
-            Self.loginItemLog.error("Launch at Login change failed: \(error.localizedDescription, privacy: .public)")
+            Self.loginItemLog.error("Launch at Login change failed: \(error.localizedDescription)")
             launchAtLoginFailure = error.localizedDescription
         }
         refreshLaunchAtLogin()
@@ -279,7 +278,7 @@ final class AppModel {
     func refreshLaunchAtLogin() {
         let status = loginItem.status
         if status != launchAtLoginStatus {
-            Self.loginItemLog.notice("Launch at Login: \(String(describing: status), privacy: .public)")
+            Self.loginItemLog.notice("Launch at Login: \(String(describing: status))")
         }
         launchAtLoginStatus = status
         defaults.set(status.isOn, forKey: Self.launchAtLoginKey)
@@ -296,7 +295,7 @@ final class AppModel {
         let after = Self.describe(next)
         state = next
         if before != after {
-            Self.pollLog.notice("State: \(before, privacy: .public) → \(after, privacy: .public)")
+            Self.pollLog.notice("State: \(before) → \(after)")
         }
     }
 
@@ -357,16 +356,15 @@ final class AppModel {
         } catch {
             // Status text only — never the Credential. The banner reads
             // "Sign-in failed: the saved sign-in could not be read (…)".
-            Self.log.error("Could not read the saved sign-in: \(error.localizedDescription, privacy: .public)")
+            Self.log.error("Could not read the saved sign-in: \(error.localizedDescription)")
             signInFailure = "the saved sign-in could not be read (\(error.localizedDescription))"
         }
     }
 
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "tracklaude"
-    private static let log = Logger(subsystem: subsystem, category: "auth")
-    private static let pollLog = Logger(subsystem: subsystem, category: "poll")
-    private static let alertLog = Logger(subsystem: subsystem, category: "alerts")
-    private static let loginItemLog = Logger(subsystem: subsystem, category: "login-item")
+    private static let log = AppLog(category: "auth")
+    private static let pollLog = AppLog(category: "poll")
+    private static let alertLog = AppLog(category: "alerts")
+    private static let loginItemLog = AppLog(category: "login-item")
 
     /// The banner's one button.
     func perform(_ action: PopoverBanner.Action) {
@@ -413,7 +411,7 @@ final class AppModel {
                 if Task.isCancelled || error is CancellationError {
                     transition(to: resumeState)
                 } else {
-                    Self.log.error("Sign-in failed: \(error.localizedDescription, privacy: .public)")
+                    Self.log.error("Sign-in failed: \(error.localizedDescription)")
                     signInFailure = error.localizedDescription
                     transition(to: .signedOut)
                 }
@@ -450,7 +448,7 @@ final class AppModel {
                 try await store.delete()
                 Self.log.notice("Signed out: Credential removed")
             } catch {
-                Self.log.error("Sign out could not remove the Credential: \(error.localizedDescription, privacy: .public)")
+                Self.log.error("Sign out could not remove the Credential: \(error.localizedDescription)")
                 signOutFailure = error.localizedDescription
             }
         }

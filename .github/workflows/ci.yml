@@ -32,9 +32,13 @@ jobs:
       - name: Bundle and sign
         run: make sign
 
-      - name: Verify entitlements are exactly app-sandbox, network.client, network.server
-        run: |
-          codesign -d --entitlements :- dist/tracklaude.app 2>/dev/null \
-            | grep -o 'com\.apple\.security[a-z.-]*' | sort > actual.txt
-          printf 'com.apple.security.app-sandbox\ncom.apple.security.network.client\ncom.apple.security.network.server\n' > expected.txt
-          diff expected.txt actual.txt
+      # Trust guarantees (ticket 09): the README's promises, enforced. Each script is
+      # runnable locally and was verified to fail when its property is broken.
+      - name: Every log call goes through the redactor
+        run: sh Scripts/check-log-redaction.sh
+
+      - name: Release binary names no host outside the allowlist
+        run: sh Scripts/check-hostnames.sh .build/release/tracklaude
+
+      - name: Signed app carries exactly app-sandbox, network.client, network.server
+        run: sh Scripts/check-entitlements.sh dist/tracklaude.app
