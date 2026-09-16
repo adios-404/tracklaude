@@ -36,6 +36,9 @@ final class AppModel {
     /// The one fetch in flight. Kept apart from `timerTask` so re-planning never cancels a
     /// request mid-flight (URLSession would report it as a failure).
     private var fetchTask: Task<Void, Never>?
+    /// Bumped whenever an in-flight fetch is abandoned (sleep), so its completion cannot
+    /// clear the handle of a fetch started afterwards (wake).
+    private var fetchGeneration = 0
     private var sleepObservers: [any NSObjectProtocol] = []
 
     private let store: any CredentialStore
@@ -53,8 +56,11 @@ final class AppModel {
 
     // MARK: - Polling
 
+    /// Why: signed in *and* holding an access token. During restore `auth` flips to
+    /// `.signedIn` before the refresh grant lands; a popover open in that window must not
+    /// stamp a phantom fetch that delays the real first one by a whole interval.
     private var pollState: PollState {
-        guard auth == .signedIn else { return .signedOut }
+        guard auth == .signedIn, accessToken != nil else { return .signedOut }
         return isAsleep ? .asleep : .active
     }
 
@@ -62,8 +68,7 @@ final class AppModel {
     /// Every entry point into polling — sign-in, wake, popover open, Refresh, a finished
     /// fetch — goes through here so the pure scheduler is the only cadence rule.
     func poll(_ trigger: PollTrigger) {
-        timerTask?.cancel()
-        timerTask = nil
+        cancelTimer()
         let now = Date()
         guard let next = PollScheduler.nextFetch(
             state: pollState, now: now, lastFetch: lastFetch, trigger: trigger
@@ -74,10 +79,20 @@ final class AppModel {
             return
         }
         timerTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(delay))
+            // Why: the default tolerance lets the system coalesce timers and measured ~4 %
+            // late (≈ 31 s cadence). The only error `sleep` throws is cancellation, handled
+            // by the guard below.
+            try? await Task.sleep(for: .seconds(delay), tolerance: Self.timerTolerance)
             guard !Task.isCancelled else { return }
             self?.startFetch(.timer)
         }
+    }
+
+    private static let timerTolerance: Duration = .milliseconds(100)
+
+    private func cancelTimer() {
+        timerTask?.cancel()
+        timerTask = nil
     }
 
     /// The Refresh button. The scheduler applies the cooldown; the view disables the button.
@@ -92,9 +107,12 @@ final class AppModel {
         let issuedAt = Date()
         lastFetch = issuedAt
         now = issuedAt
+        fetchGeneration += 1
+        let generation = fetchGeneration
         Self.pollLog.notice("Usage fetch issued (\(String(describing: trigger), privacy: .public))")
         fetchTask = Task {
-            await fetchUsage()
+            await fetchUsage(issuedAt: issuedAt)
+            guard generation == fetchGeneration else { return }
             fetchTask = nil
             poll(.timer)
         }
@@ -106,19 +124,23 @@ final class AppModel {
     private func observeSleepAndWake() {
         let center = NSWorkspace.shared.notificationCenter
         sleepObservers = [
-            center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { [weak self] in self?.machineWillSleep() }
+            center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.machineWillSleep() }
             },
-            center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { [weak self] in self?.machineDidWake() }
+            center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.machineDidWake() }
             },
         ]
     }
 
     private func machineWillSleep() {
         isAsleep = true
-        timerTask?.cancel()
-        timerTask = nil
+        cancelTimer()
+        // Why: a request caught mid-flight by sleep is stale on wake and, left running,
+        // would make the wake fetch a no-op until it timed out (up to 30 s). Drop it.
+        fetchTask?.cancel()
+        fetchTask = nil
+        fetchGeneration += 1
         Self.pollLog.notice("Sleeping: polling suspended")
     }
 
@@ -155,19 +177,28 @@ final class AppModel {
         }
     }
 
-    private func fetchUsage() async {
-        guard let accessToken else { return }
+    /// `issuedAt` is the same instant as `lastFetch`, so the footer's "Updated" age and the
+    /// Refresh cooldown never disagree by a request's duration.
+    private func fetchUsage(issuedAt: Date) async {
+        guard let accessToken else {
+            // Unreachable while `pollState` requires a token; loud if that ever changes.
+            Self.log.fault("Usage fetch attempted without an access token")
+            return
+        }
         do {
-            snapshot = try await UsageFetch.perform(accessToken: accessToken, transport: transport, now: Date())
+            snapshot = try await UsageFetch.perform(accessToken: accessToken, transport: transport, now: issuedAt)
             fetchFailure = nil
         } catch {
+            // A fetch abandoned at sleep is not a failure the user needs to see.
+            guard !Task.isCancelled else { return }
             Self.log.error("Usage fetch failed: \(error.localizedDescription, privacy: .public)")
             fetchFailure = error.localizedDescription
         }
     }
 
-    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "tracklaude", category: "auth")
-    private static let pollLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "tracklaude", category: "poll")
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "tracklaude"
+    private static let log = Logger(subsystem: subsystem, category: "auth")
+    private static let pollLog = Logger(subsystem: subsystem, category: "poll")
 
     func signIn() {
         guard signInTask == nil else { return }

@@ -11,7 +11,7 @@ struct PopoverView: View {
         // the popover closes; nothing in the model has to run a one-second timer.
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(alignment: .leading, spacing: 10) {
-                authSection
+                authSection(now: context.date)
                 Divider()
                 footer(now: context.date)
             }
@@ -43,12 +43,12 @@ struct PopoverView: View {
 
     /// A bare readout of the Snapshot; the full row layout is ticket 06.
     @ViewBuilder
-    private var usageSection: some View {
+    private func usageSection(now: Date) -> some View {
         if let snapshot = model.snapshot {
-            windowLine("5-hour", snapshot.fiveHour)
-            windowLine("7-day", snapshot.sevenDay)
+            windowLine("5-hour", snapshot.fiveHour, now: now)
+            windowLine("7-day", snapshot.sevenDay, now: now)
             ForEach(snapshot.perModel, id: \.model) { entry in
-                windowLine(entry.model, entry.window)
+                windowLine(entry.model, entry.window, now: now)
             }
         } else if let failure = model.fetchFailure {
             Label("Usage unavailable", systemImage: "exclamationmark.triangle")
@@ -62,17 +62,17 @@ struct PopoverView: View {
         }
     }
 
-    private func windowLine(_ name: String, _ window: TracklaudeCore.Window?) -> some View {
+    private func windowLine(_ name: String, _ window: TracklaudeCore.Window?, now: Date) -> some View {
         HStack {
             Text(name)
             Spacer()
-            Text(MenuBarText.render(window: window, remaining: false, now: model.now))
+            Text(MenuBarText.render(window: window, remaining: false, now: now))
                 .monospacedDigit()
         }
     }
 
     @ViewBuilder
-    private var authSection: some View {
+    private func authSection(now: Date) -> some View {
         switch model.auth {
         case .signedOut:
             Button("Sign in with Claude") { model.signIn() }
@@ -82,7 +82,7 @@ struct PopoverView: View {
             Button("Cancel") { model.cancelSignIn() }
         case .signedIn:
             Label("Signed in", systemImage: "checkmark.circle")
-            usageSection
+            usageSection(now: now)
         case .failed(let reason):
             Label("Sign-in failed", systemImage: "exclamationmark.triangle")
             Text(reason)

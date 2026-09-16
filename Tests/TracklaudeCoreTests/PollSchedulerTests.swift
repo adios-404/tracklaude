@@ -5,15 +5,10 @@ import TracklaudeCore
 // The scheduler is pure: (state, now, last fetch, trigger) → when to fetch next, or nil.
 private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-private func next(
-    _ state: PollState,
-    lastFetch: TimeInterval?,
-    trigger: PollTrigger,
-    at time: Date = now
-) -> Date? {
+private func next(_ state: PollState, lastFetch: TimeInterval?, trigger: PollTrigger) -> Date? {
     PollScheduler.nextFetch(
         state: state,
-        now: time,
+        now: now,
         lastFetch: lastFetch.map { now.addingTimeInterval($0) },
         trigger: trigger
     )
