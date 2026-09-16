@@ -1,0 +1,77 @@
+name: Release
+
+# Pushing a tag `vX.Y.Z` publishes a GitHub Release carrying `tracklaude-vX.Y.Z.zip` and
+# its `.sha256`, built by this public workflow from the tagged source (spec story 38;
+# ADR-0002: no auto-update, so this plus Homebrew is the whole update channel).
+on:
+  push:
+    tags: ['v*']
+
+# Only what `gh release create` needs. The token is the runner's own; no long-lived key
+# lives in this repository's secrets — releases are ad-hoc signed on purpose (ticket 10).
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Toolchain
+        run: swift --version
+
+      # The bundle's version comes from the VERSION file, so the tag must say the same
+      # thing or the Release would carry an app whose Info.plist contradicts its name.
+      - name: Tag matches VERSION
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          file_version="$(tr -d '[:space:]' < VERSION)"
+          if [ "$tag_version" != "$file_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match VERSION file ($file_version); bump VERSION first." >&2
+            exit 1
+          fi
+
+      - name: Test
+        run: make test
+
+      # One `sign` feeds both: the trust checks (log redaction, hostname allowlist,
+      # entitlements — the README's promises) and the archive. A release cannot ship
+      # what CI would refuse.
+      - name: Build, sign, trust checks, zip
+        run: make trust zip
+
+      - name: Info.plist version equals the tag
+        run: |
+          plist_version="$(plutil -extract CFBundleShortVersionString raw dist/tracklaude.app/Contents/Info.plist)"
+          [ "v$plist_version" = "$GITHUB_REF_NAME" ] || { echo "Info.plist says $plist_version, tag is $GITHUB_REF_NAME" >&2; exit 1; }
+
+      - name: Verify the archive round-trips
+        run: |
+          cd dist
+          shasum -a 256 -c "tracklaude-$GITHUB_REF_NAME.zip.sha256"
+          mkdir roundtrip && ditto -x -k "tracklaude-$GITHUB_REF_NAME.zip" roundtrip
+          codesign --verify --verbose=2 roundtrip/tracklaude.app
+
+      # A tag with a hyphen (`v0.0.1-test`, `v1.0.0-rc1`) is marked pre-release so
+      # "latest" keeps pointing at a real version.
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          # `--notes` is prepended to the generated notes: the run that built this
+          # Release and the hash, so a reader can verify without leaving the page.
+          notes="Built by [run $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) from \`$GITHUB_SHA\`.
+
+          SHA-256: \`$(cut -d' ' -f1 "dist/tracklaude-$GITHUB_REF_NAME.zip.sha256")\` — see README › Verify a release."
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag --generate-notes --title "$GITHUB_REF_NAME" $prerelease \
+            --notes "$notes" \
+            "dist/tracklaude-$GITHUB_REF_NAME.zip" \
+            "dist/tracklaude-$GITHUB_REF_NAME.zip.sha256"

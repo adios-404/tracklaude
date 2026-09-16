@@ -36,3 +36,8 @@ jobs:
       # Scripts/check-*.sh scripts; each was verified to fail when its property is broken.
       - name: Trust checks — log redaction, hostname allowlist, entitlements
         run: make trust
+
+      # The release workflow's archive step, exercised on every push so a broken `zip`
+      # target fails CI rather than a tagged release.
+      - name: Zip
+        run: make zip

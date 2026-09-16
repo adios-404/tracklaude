@@ -12,6 +12,15 @@ APP         := $(DIST_DIR)/$(APP_NAME).app
 CONTENTS    := $(APP)/Contents
 INSTALL_DIR := /Applications
 ENTITLEMENTS := Packaging/$(APP_NAME).entitlements
+ZIP         := $(DIST_DIR)/$(APP_NAME)-v$(VERSION).zip
+
+# Code-signing identity. `-` is ad-hoc: no certificate, what releases ship with (ticket 10:
+# a stable key in CI would be the supply-chain property this project set out to avoid).
+# Why the override: an ad-hoc signature changes with every build, and the Keychain binds
+# the Credential's ACL to that hash, so each rebuild asks for the login password twice.
+# A self-signed code-signing cert the owner trusts once gives local builds a stable
+# identity and ends the prompting — README › Build from source shows how to make one.
+SIGN_IDENTITY ?= -
 
 # Why: with only Command Line Tools installed, SwiftPM never searches the directory that
 # holds Testing.framework (`xcrun --show-sdk-platform-path` fails there), so `swift test`
@@ -32,7 +41,7 @@ else
                 -Xswiftc -Xfrontend -Xswiftc -disable-cross-import-overlays
 endif
 
-.PHONY: all build test bundle sign install run clean trust
+.PHONY: all build test bundle sign install run clean trust zip
 
 all: build
 
@@ -52,7 +61,7 @@ bundle: build
 	@echo "Assembled $(APP) (v$(VERSION))"
 
 sign: bundle
-	codesign --force --sign - --entitlements "$(ENTITLEMENTS)" --identifier "$(BUNDLE_ID)" "$(APP)"
+	codesign --force --sign "$(SIGN_IDENTITY)" --entitlements "$(ENTITLEMENTS)" --identifier "$(BUNDLE_ID)" "$(APP)"
 	codesign --verify --verbose=2 "$(APP)"
 
 install: sign
@@ -76,3 +85,15 @@ trust: sign
 	sh Scripts/check-log-redaction.sh
 	sh Scripts/check-hostnames.sh "$(BUILD_DIR)/$(APP_NAME)"
 	sh Scripts/check-entitlements.sh "$(APP)"
+
+# Release artefact: the signed bundle as a zip plus its SHA-256, the two files a GitHub
+# Release carries. `--keepParent` makes the archive unpack to `tracklaude.app`, not to its
+# contents. `--norsrc` leaves out extended attributes: the only one a build carries is
+# `com.apple.provenance` (verified 2026-09-17), which the signature does not cover, and
+# without it `unzip` produces no `._*` litter. The .sha256 file is written from inside
+# dist/ so it names the bare file and `shasum -a 256 -c` works wherever the download landed.
+zip: sign
+	rm -f "$(ZIP)" "$(ZIP).sha256"
+	ditto -c -k --keepParent --norsrc "$(APP)" "$(ZIP)"
+	cd "$(DIST_DIR)" && shasum -a 256 "$(notdir $(ZIP))" > "$(notdir $(ZIP)).sha256"
+	@cat "$(ZIP).sha256"
