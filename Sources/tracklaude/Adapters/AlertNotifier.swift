@@ -31,22 +31,24 @@ final class AlertNotifier {
         center?.delegate = presenter
     }
 
+    // Why: the callback forms throughout, not the async ones. CI's Swift 6.0 treats every
+    // `await center.…` as sending the non-Sendable center off the main actor and refuses;
+    // with continuations only Sendable values (a status, an error) cross. Swift 6.2 accepts both.
+
     /// Asks once; macOS remembers the answer, so calling this on every enable is harmless.
     func requestPermission() async -> AlertPermission {
         guard let center else { return .denied }
-        do {
-            _ = try await center.requestAuthorization(options: [.alert, .sound])
-        } catch {
-            Self.log.error("Notification permission request failed: \(error.localizedDescription, privacy: .public)")
+        let failure: (any Error)? = await withCheckedContinuation { continuation in
+            center.requestAuthorization(options: [.alert, .sound]) { _, error in continuation.resume(returning: error) }
+        }
+        if let failure {
+            Self.log.error("Notification permission request failed: \(failure.localizedDescription, privacy: .public)")
         }
         return await permission()
     }
 
     func permission() async -> AlertPermission {
         guard let center else { return .denied }
-        // Why: `notificationSettings()` hands back a non-Sendable object, which CI's Swift
-        // 6.0 refuses to bring onto the main actor; the callback form lets only the status
-        // (a plain enum) cross.
         let status = await withCheckedContinuation { continuation in
             center.getNotificationSettings { continuation.resume(returning: $0.authorizationStatus) }
         }
@@ -65,11 +67,13 @@ final class AlertNotifier {
         content.body = alert.body
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        do {
-            try await center.add(request)
+        let failure: (any Error)? = await withCheckedContinuation { continuation in
+            center.add(request) { error in continuation.resume(returning: error) }
+        }
+        if let failure {
+            Self.log.error("Could not deliver \(alert.title, privacy: .public): \(failure.localizedDescription, privacy: .public)")
+        } else {
             Self.log.notice("Delivered: \(alert.title, privacy: .public)")
-        } catch {
-            Self.log.error("Could not deliver \(alert.title, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 }
