@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 Live 5-hour readout
 
-**Status:** done (2026-09-17, commits 6796781, e3f07f0, ce95dad + review fixes)
+**Status:** done (2026-09-17, commits 6796781, e3f07f0, ce95dad, 192bb00 + two Swift 6.0 CI fixes)
 
 - [x] Alert decision is a pure function of (previous state, new Snapshot) returning the Alerts to fire and the new fired-set; tests cover: single crossing, skipping straight from 70 to 95 (fires 80 and 90), no repeat on the next poll, cycle change clears, Reset Alert only when previous ≥ 80, per-model Windows alert independently
 - [x] Notification titles and bodies are exact and name the Window
@@ -73,3 +73,13 @@ booleans the spec names are now `alertsEnabled` and the coming `launchAtLogin`, 
 `showsRemaining`. Sign out should also clear `alertState` (do it where `session = nil` lands) so
 the next sign-in gets the quiet first sighting. Ad-hoc signing did not stop notification
 permission — macOS keyed it on the bundle id and path, and it survived a rebuild.
+
+**Review fixes (192bb00):** records carry over when a Window is missing from one Snapshot; a
+Reset flapping to nil is not a new cycle (the record keeps the last known Reset); delivery
+awaits any open permission prompt and asks macOS for the current answer rather than the cached
+one; deliveries queue in order; the undetermined state also shows the line + button;
+`Snapshot.windowsByName` is the one ordering shared by the rows and the Alerts. Not changed:
+`threshold` is a CONTEXT.md *Avoid* word but the spec uses it too (one for `/domain-modeling`);
+`TracklaudeCore.Alert` shadows `SwiftUI.Alert` — qualify if the popover ever needs the SwiftUI
+one. CI (Swift 6.0) needed two follow-ups: every `await` on `UNUserNotificationCenter` "sends"
+the non-Sendable center, so the adapter uses the callback APIs through continuations.
