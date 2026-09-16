@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 30-second polling
 
-**Status:** done (2026-09-17, commits d61c260, 45c878d, 26fc4f7, 015eea6 + review fixes)
+**Status:** done (2026-09-17, commits d61c260, 45c878d, 26fc4f7, 015eea6, 34bd36a + review fixes)
 
 - [x] Every state transition listed above has a test driven through the transport seam with the recorded failure fixtures
 - [x] Menu-bar text builder covers every Stale reason and signed-out; dimming is a view-model flag, not a view decision
@@ -40,9 +40,10 @@ check and look for `Sleeping: polling suspended` / `Woke: polling resumes` / `fe
 `State/AppState` (`AppState`, `StaleReason`, `applying(_:now:)` is the whole transition table),
 `State/Backoff` (60→120→240→480→600 cap; `Retry-After` wins outright), `State/PopoverBanner`
 (message + `Action?` with its button title), `Usage/FetchResult` (`FetchFailure` = one case per
-Stale reason), `Usage/UsageSession` (an actor holding the access token; refreshes before the first
-fetch on a Credential-only launch, and does 401 → refresh once → retry once, persisting a rotated
-Credential *before* the retry). `MenuBarText.render(state:remaining:now:)` returns a
+Stale reason), `Usage/UsageSession` (an actor created from a Credential — loaded on launch or produced by a
+sign-in — holding it and the access token; refreshes before the first fetch on a Credential-only
+launch, and does 401 → refresh once → retry once, persisting a rotated Credential *before* the
+retry). `MenuBarText.render(state:remaining:now:)` returns a
 `MenuBarLabel { text, isDimmed }`. `PollState` gained `.backingOff(until:)`, for which every trigger
 returns `max(until, now)`, and `isManualRefreshAllowed` took a `state` parameter so the Refresh
 button is grey for the whole lockout. Tests use a new `ScriptedTransport` fake (a queue of replies,
@@ -87,6 +88,13 @@ way, 2026-09-17).
 - `signInFailure: String?` stays in `AppModel` beside the state: a failed sign-in lands in
   `.signedOut` with the reason on the banner ("Sign-in failed: …"); a *cancelled* one returns to
   the state it started from (an expired session keeps its readout).
+- `Retry-After` sets the delay but does not reset the 429 count: 429 (`Retry-After: 300`) then
+  429 (no header) waits 120 s, not 60. The spec is silent; the count is "429s in a row", which
+  that is.
+- A Keychain *read* failure at launch is not a session problem: `restoreCredential` logs it and
+  the signed-out banner reads "Sign-in failed: the saved sign-in could not be read (…)".
+  (Review caught the first cut mapping it to `sessionExpired`; `UsageSession` no longer reads
+  the store at all.)
 - The poll timer sleeps in ≤ 30 s chunks and bumps `model.now` between them, so Time-to-Reset in
   the menu bar keeps moving through a 10-minute backoff.
 - `PopoverView` also dims the rows while Stale (secondary colour) — not in the spec, cheap, and
@@ -95,9 +103,13 @@ way, 2026-09-17).
 Findings that matter downstream:
 
 - **The whole UI is now a function of `model.state`**; ticket 06 should build the rows from
-  `state.lastSnapshot` and keep the banner as the first element. Ticket 08's Sign out should
-  call a new `UsageSession.forget()` (drop the token), `store.delete()`, and
-  `transition(to: .signedOut)` — the pieces are there, the method is not.
+  `state.lastSnapshot` and keep the banner as the first element. Ticket 08's Sign out is
+  `session = nil`, `store.delete()`, `transition(to: .signedOut)` — the session exists only
+  while signed in.
+- Review noted (not acted on): the log redactor is ticket 09's; the two new
+  `error.localizedDescription` log lines in `AppModel` carry no token but must go through it
+  then. `AppModel.pollState` / `describe` are pure functions of `AppState` living in the
+  executable; move them into core if 08/09 want them tested.
 - `AppState.applying` is the only transition table for fetch results; sign-in/out transitions live
   in `AppModel.signIn()` / `restoreCredential()`. Alerts (07) should be decided *before*
   `transition(to:)` in `fetchUsage`, comparing `state.lastSnapshot` with the fresh one.

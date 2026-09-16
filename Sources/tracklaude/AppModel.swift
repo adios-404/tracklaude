@@ -21,8 +21,9 @@ final class AppModel {
     /// interval. The popover ticks its own clock once a second while open.
     private(set) var now = Date()
 
-    /// Holds the access token (memory only, ADR-0001) and does the 401 → refresh → retry dance.
-    private let session: UsageSession
+    /// Holds the Credential and access token (memory only, ADR-0001) and does the
+    /// 401 → refresh → retry dance. `nil` exactly while not signed in.
+    private var session: UsageSession?
     private var signInTask: Task<Void, Never>?
     private var isAsleep = false
     /// Sleeps until the next cadence slot, then issues a fetch. Cancelled on every re-plan.
@@ -44,7 +45,6 @@ final class AppModel {
     ) {
         self.store = store
         self.transport = transport
-        self.session = UsageSession(store: store, transport: transport)
         observeSleepAndWake()
         Task { await restoreCredential() }
     }
@@ -140,6 +140,11 @@ final class AppModel {
     /// `issuedAt` is the same instant as `lastFetch`, so the footer's "Updated" age and the
     /// Refresh cooldown never disagree by a request's duration.
     private func fetchUsage(issuedAt: Date) async {
+        guard let session else {
+            // Unreachable while `pollState` requires a signed-in state; loud if that ever changes.
+            Self.log.fault("Usage fetch attempted without a session")
+            return
+        }
         let result = await session.fetch(now: issuedAt)
         // A fetch abandoned at sleep is not a failure the user needs to see.
         guard !Task.isCancelled else { return }
@@ -212,13 +217,15 @@ final class AppModel {
     /// Only the Credential survives a relaunch; the session refreshes before its first fetch.
     private func restoreCredential() async {
         do {
-            guard try await store.load() != nil else { return }
+            guard let credential = try await store.load() else { return }
+            session = UsageSession(credential: credential, store: store, transport: transport)
             transition(to: .polling(nil))
             poll(.timer)
         } catch {
-            // Status text only — never the Credential.
+            // Status text only — never the Credential. The banner reads
+            // "Sign-in failed: the saved sign-in could not be read (…)".
             Self.log.error("Could not read the saved sign-in: \(error.localizedDescription, privacy: .public)")
-            signInFailure = "Could not read the saved sign-in: \(error.localizedDescription)"
+            signInFailure = "the saved sign-in could not be read (\(error.localizedDescription))"
         }
     }
 
@@ -254,7 +261,10 @@ final class AppModel {
             defer { signInTask = nil }
             do {
                 let tokens = try await flow.run()
-                await session.adopt(accessToken: tokens.accessToken)
+                session = UsageSession(
+                    credential: Credential(refreshToken: tokens.refreshToken),
+                    accessToken: tokens.accessToken, store: store, transport: transport
+                )
                 transition(to: .polling(resumeState.lastSnapshot))
                 poll(.timer)
             } catch {

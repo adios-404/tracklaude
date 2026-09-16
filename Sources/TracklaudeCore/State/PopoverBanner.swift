@@ -4,7 +4,7 @@ import Foundation
 /// fixes it (spec › Popover). `nil` when there is nothing to explain.
 ///
 /// Pure; the executable ticks `now` once a second while the popover is open so the
-/// rate-limit countdown moves.
+/// rate-limit wait text moves.
 public struct PopoverBanner: Equatable, Sendable {
     public enum Action: Equatable, Sendable {
         case signIn
@@ -50,7 +50,7 @@ public struct PopoverBanner: Equatable, Sendable {
             return PopoverBanner(message: rateLimited, action: .retry)
         case .backingOff(_, let until, _):
             let remaining = until.timeIntervalSince(now)
-            let when = remaining > 0 ? "in \(countdown(remaining))." : "now…"
+            let when = remaining > 0 ? "in \(waitText(remaining))." : "now…"
             return PopoverBanner(message: "\(rateLimited) Retrying \(when)", action: nil)
         }
     }
@@ -59,7 +59,7 @@ public struct PopoverBanner: Equatable, Sendable {
 
     /// `4 min 59 s` / `59 s`: the same units the footer's "Updated" text uses. Rounds up so
     /// the count never reads 0 s while a wait remains.
-    private static func countdown(_ seconds: TimeInterval) -> String {
+    private static func waitText(_ seconds: TimeInterval) -> String {
         let whole = Int(seconds.rounded(.up))
         let minutes = whole / 60
         let rest = whole % 60

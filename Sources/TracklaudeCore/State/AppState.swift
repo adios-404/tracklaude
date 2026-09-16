@@ -16,7 +16,9 @@ public enum AppState: Equatable, Sendable {
     case signingIn
     /// Signed in, fetching every 30 s. `nil` until the first Snapshot lands.
     case polling(Snapshot?)
-    /// The last fetch failed; the Snapshot shown is the last good one.
+    /// The last fetch failed; the Snapshot shown is the last good one. `applying` never
+    /// produces `.stale(_, .rateLimited)`: a 429 always becomes `backingOff`, which renders
+    /// as that reason. The case is representable so the reason list matches the spec.
     case stale(Snapshot?, StaleReason)
     /// A 429: no fetch until `until`. `consecutiveRateLimits` is how many 429s in a row this
     /// makes, which sets the next delay if the one after `until` is refused too.

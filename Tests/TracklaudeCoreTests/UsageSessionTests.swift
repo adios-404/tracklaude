@@ -7,10 +7,16 @@ import TracklaudeCore
 private let now = Date(timeIntervalSince1970: 1_800_000_000)
 private let credential = Credential(refreshToken: "sk-ant-ort01-OLD")
 
-private func storeHolding(_ credential: Credential?) async -> InMemoryCredentialStore {
+private func storeHolding(_ credential: Credential) async -> InMemoryCredentialStore {
     let store = InMemoryCredentialStore()
-    if let credential { try? await store.save(credential) }
+    try? await store.save(credential)
     return store
+}
+
+/// A session as the executable builds one after loading the Credential on launch.
+private func session(_ transport: ScriptedTransport, store: InMemoryCredentialStore? = nil, accessToken: String? = nil) async -> UsageSession {
+    let store = if let store { store } else { await storeHolding(credential) }
+    return UsageSession(credential: credential, accessToken: accessToken, store: store, transport: transport)
 }
 
 private func usageRequests(_ transport: ScriptedTransport) async -> [HTTPRequest] {
@@ -20,7 +26,7 @@ private func usageRequests(_ transport: ScriptedTransport) async -> [HTTPRequest
 @Test("with an access token in hand, a 200 is one request and a Snapshot")
 func fetchWithTokenIsOneRequest() async throws {
     let transport = ScriptedTransport([.success(try Fixture.response("usage-normal.http"))])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport, accessToken: "sk-ant-oat01-A")
+    let session = await session(transport, accessToken: "sk-ant-oat01-A")
 
     let result = await session.fetch(now: now)
 
@@ -38,7 +44,7 @@ func unauthorizedRefreshesAndRetries() async throws {
         .success(try Fixture.jsonResponse("oauth-token-response.json")),
         .success(try Fixture.response("usage-normal.http")),
     ])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport, accessToken: "sk-ant-oat01-DEAD")
+    let session = await session(transport, accessToken: "sk-ant-oat01-DEAD")
 
     let result = await session.fetch(now: now)
 
@@ -55,7 +61,7 @@ func rotationIsPersistedImmediately() async throws {
         .success(try Fixture.jsonResponse("oauth-token-response.json")),
         .success(try Fixture.response("usage-normal.http")),
     ])
-    let session = UsageSession(store: store, transport: transport, accessToken: "sk-ant-oat01-DEAD")
+    let session = await session(transport, store: store, accessToken: "sk-ant-oat01-DEAD")
 
     _ = await session.fetch(now: now)
 
@@ -69,7 +75,7 @@ func refreshRefusedIsSessionExpired() async throws {
         .success(try Fixture.response("usage-401.http")),
         .success(.json(status: 400, #"{"error":"invalid_grant"}"#)),
     ])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport, accessToken: "sk-ant-oat01-DEAD")
+    let session = await session(transport, accessToken: "sk-ant-oat01-DEAD")
 
     let result = await session.fetch(now: now)
 
@@ -84,7 +90,7 @@ func unauthorizedAfterRefreshIsSessionExpired() async throws {
         .success(try Fixture.jsonResponse("oauth-token-response.json")),
         .success(try Fixture.response("usage-401.http")),
     ])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport, accessToken: "sk-ant-oat01-DEAD")
+    let session = await session(transport, accessToken: "sk-ant-oat01-DEAD")
 
     #expect(await session.fetch(now: now) == .failed(.sessionExpired))
 }
@@ -95,7 +101,7 @@ func noTokenRefreshesFirst() async throws {
         .success(try Fixture.jsonResponse("oauth-token-response.json")),
         .success(try Fixture.response("usage-normal.http")),
     ])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport)
+    let session = await session(transport)
 
     let result = await session.fetch(now: now)
 
@@ -104,19 +110,10 @@ func noTokenRefreshesFirst() async throws {
     #expect(sent.map(\.url) == [OAuthConfig.tokenURL, UsageFetch.usageURL])
 }
 
-@Test("no token and no Credential in the store → session expired without touching the network")
-func noCredentialIsSessionExpired() async {
-    let transport = ScriptedTransport([])
-    let session = UsageSession(store: await storeHolding(nil), transport: transport)
-
-    #expect(await session.fetch(now: now) == .failed(.sessionExpired))
-    #expect(await transport.sent.isEmpty)
-}
-
 @Test("a network error on the usage request → offline")
 func networkErrorIsOffline() async {
     let transport = ScriptedTransport([.failure(NetworkDown())])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport, accessToken: "T")
+    let session = await session(transport, accessToken: "T")
 
     #expect(await session.fetch(now: now) == .failed(.offline))
 }
@@ -124,7 +121,7 @@ func networkErrorIsOffline() async {
 @Test("a network error on the refresh → offline, not expired: the Credential may be fine")
 func networkErrorDuringRefreshIsOffline() async {
     let transport = ScriptedTransport([.failure(NetworkDown())])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport)
+    let session = await session(transport)
 
     #expect(await session.fetch(now: now) == .failed(.offline))
 }
@@ -132,7 +129,7 @@ func networkErrorDuringRefreshIsOffline() async {
 @Test("the recorded 429 → rate limited with its Retry-After")
 func rateLimitedCarriesRetryAfter() async throws {
     let transport = ScriptedTransport([.success(try Fixture.response("usage-429.http"))])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport, accessToken: "T")
+    let session = await session(transport, accessToken: "T")
 
     #expect(await session.fetch(now: now) == .failed(.rateLimited(retryAfter: 300)))
 }
@@ -141,7 +138,7 @@ func rateLimitedCarriesRetryAfter() async throws {
 func serverSideFailuresAreServerError() async throws {
     for reply in [try Fixture.response("usage-5xx.http"), try Fixture.response("usage-html.http"), .json(status: 200, "[]")] {
         let transport = ScriptedTransport([.success(reply)])
-        let session = UsageSession(store: await storeHolding(credential), transport: transport, accessToken: "T")
+        let session = await session(transport, accessToken: "T")
         let result = await session.fetch(now: now)
         #expect(result == .failed(.serverError), "for HTTP \(reply.status)")
     }
@@ -153,18 +150,24 @@ func refreshServerErrorIsServerError() async throws {
         .success(try Fixture.response("usage-401.http")),
         .success(.json(status: 503, "{}")),
     ])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport, accessToken: "T")
+    let session = await session(transport, accessToken: "T")
 
     #expect(await session.fetch(now: now) == .failed(.serverError))
 }
 
-@Test("a token adopted after sign-in is used as-is, with no refresh")
-func adoptedTokenIsUsed() async throws {
-    let transport = ScriptedTransport([.success(try Fixture.response("usage-normal.http"))])
-    let session = UsageSession(store: await storeHolding(credential), transport: transport)
-    await session.adopt(accessToken: "sk-ant-oat01-FRESH")
+@Test("after a rotation the next refresh uses the rotated Credential, not the one the session started with")
+func rotatedCredentialIsUsedNextTime() async throws {
+    let transport = ScriptedTransport([
+        .success(try Fixture.jsonResponse("oauth-token-response.json")),   // rotates OLD → REFRESH
+        .success(try Fixture.response("usage-401.http")),
+        .success(.json(status: 200, #"{"token_type":"Bearer","access_token":"sk-ant-oat01-B","expires_in":3600}"#)),
+        .success(try Fixture.response("usage-normal.http")),
+    ])
+    let session = await session(transport)
 
     _ = await session.fetch(now: now)
 
-    #expect(await transport.sent.first?.headers["Authorization"] == "Bearer sk-ant-oat01-FRESH")
+    let refreshes = await transport.sent.filter { $0.url == OAuthConfig.tokenURL }
+    let secondGrant = try JSONDecoder().decode([String: String].self, from: try #require(refreshes.last?.body))
+    #expect(secondGrant["refresh_token"] == "sk-ant-ort01-REFRESH")
 }

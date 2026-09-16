@@ -1,58 +1,61 @@
 import Foundation
 
-/// The signed-in session: holds the access token (memory only, ADR-0001), obtains one from
-/// the Credential when there is none, and cures a 401 with one refresh and one retry
-/// (spec › Sign-in). Every failure comes out as one `FetchFailure` the state machine can
-/// apply; the HTTP details stay here.
+/// The signed-in session: holds the Credential and the access token (memory only,
+/// ADR-0001), obtains a token when there is none, and cures a 401 with one refresh and one
+/// retry (spec › Sign-in). Every failure comes out as one `FetchFailure` the state machine
+/// can apply; the HTTP details stay here.
+///
+/// Exists only while signed in: the executable creates one from the Credential it loaded
+/// (a launch) or from the tokens a sign-in produced, so reading the store is never this
+/// actor's problem and a Keychain read error is never mistaken for an expired session.
 public actor UsageSession {
+    private var credential: Credential
     private var accessToken: String?
     private let store: any CredentialStore
     private let transport: any UsageTransport
 
     /// - Parameter accessToken: `nil` on a fresh launch, when only the Credential survived
     ///   and the first fetch has to start with a refresh.
-    public init(store: any CredentialStore, transport: any UsageTransport, accessToken: String? = nil) {
+    public init(
+        credential: Credential,
+        accessToken: String? = nil,
+        store: any CredentialStore,
+        transport: any UsageTransport
+    ) {
+        self.credential = credential
+        self.accessToken = accessToken
         self.store = store
         self.transport = transport
-        self.accessToken = accessToken
-    }
-
-    /// After a sign-in: the flow already stored the Credential; this keeps its access token.
-    public func adopt(accessToken: String) {
-        self.accessToken = accessToken
     }
 
     public func fetch(now: Date) async -> FetchResult {
         if accessToken == nil, let failure = await refreshAccessToken() {
             return .failed(failure)
         }
+        let first = await attempt(now: now)
+        guard first == .failed(.sessionExpired) else { return first }
+        // Why: the token may simply have aged out (about an hour); the Credential can still
+        // be good. One refresh, one retry, then the user has to sign in again.
+        accessToken = nil
+        if let failure = await refreshAccessToken() { return .failed(failure) }
+        return await attempt(now: now)
+    }
+
+    /// One usage request with the token in hand; a 401 reads as `sessionExpired` here and the
+    /// caller decides whether a refresh is still owed.
+    private func attempt(now: Date) async -> FetchResult {
+        guard let accessToken else { return .failed(.sessionExpired) }
         do {
-            return .snapshot(try await fetchOnce(now: now))
-        } catch UsageFetchError.unauthorized {
-            // Why: the token may simply have aged out (about an hour); the Credential can
-            // still be good. One refresh, one retry, then the user has to sign in again.
-            accessToken = nil
-            if let failure = await refreshAccessToken() { return .failed(failure) }
-            do {
-                return .snapshot(try await fetchOnce(now: now))
-            } catch {
-                return .failed(Self.classify(error))
-            }
+            return .snapshot(try await UsageFetch.perform(accessToken: accessToken, transport: transport, now: now))
         } catch {
             return .failed(Self.classify(error))
         }
     }
 
-    private func fetchOnce(now: Date) async throws -> Snapshot {
-        guard let accessToken else { throw UsageFetchError.unauthorized }
-        return try await UsageFetch.perform(accessToken: accessToken, transport: transport, now: now)
-    }
-
-    /// Trades the stored Credential for an access token; `nil` on success. A rotated
-    /// Credential is stored before anything else happens, because the old one is dead the
-    /// moment the server rotates it.
+    /// Trades the Credential for an access token; `nil` on success. A rotated Credential is
+    /// stored before anything else happens, because the old one is dead the moment the
+    /// server rotates it.
     private func refreshAccessToken() async -> FetchFailure? {
-        guard let credential = try? await store.load() else { return .sessionExpired }
         let tokens: OAuthTokens
         do {
             tokens = try await OAuthRefresh.refresh(credential, transport: transport)
@@ -68,6 +71,7 @@ public actor UsageSession {
                 // now, while the user can act, rather than an hour from now.
                 return .sessionExpired
             }
+            credential = Credential(refreshToken: tokens.refreshToken)
         }
         accessToken = tokens.accessToken
         return nil

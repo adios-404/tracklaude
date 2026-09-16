@@ -31,12 +31,16 @@ public enum MenuBarText {
             return MenuBarLabel(text: noWindow, isDimmed: false)
         case .polling(let snapshot):
             return MenuBarLabel(text: render(window: snapshot?.fiveHour, remaining: remaining, now: now), isDimmed: false)
-        case .stale, .backingOff:
-            let readout = render(window: state.lastSnapshot?.fiveHour, remaining: remaining, now: now)
-            // `staleReason` is non-nil for exactly these two cases.
-            let reason = state.staleReason.map(word) ?? ""
-            return MenuBarLabel(text: "\(readout) \(caution) \(reason)", isDimmed: true)
+        case .stale(let snapshot, let reason):
+            return stale(snapshot, reason, remaining: remaining, now: now)
+        case .backingOff(let snapshot, _, _):
+            return stale(snapshot, .rateLimited, remaining: remaining, now: now)
         }
+    }
+
+    private static func stale(_ snapshot: Snapshot?, _ reason: StaleReason, remaining: Bool, now: Date) -> MenuBarLabel {
+        let readout = render(window: snapshot?.fiveHour, remaining: remaining, now: now)
+        return MenuBarLabel(text: "\(readout) \(caution) \(word(for: reason))", isDimmed: true)
     }
 
     /// - Parameters:
