@@ -13,9 +13,9 @@ struct TracklaudeApp: App {
             // An explicit HStack renders both the glyph and the readout.
             HStack(spacing: 4) {
                 Image(systemName: "gauge.with.dots.needle.bottom.50percent")
-                // "remaining" mode and a ticking `now` arrive with the popover toggle (06)
-                // and the poll timer (04); until then the label re-renders per Snapshot.
-                Text(MenuBarText.render(window: model.snapshot?.fiveHour, remaining: false, now: Date()))
+                // "remaining" mode arrives with the popover toggle (06). `model.now` advances
+                // on every poll tick, so the label re-renders at least every 30 s.
+                Text(MenuBarText.render(window: model.snapshot?.fiveHour, remaining: false, now: model.now))
             }
         }
         .menuBarExtraStyle(.window)
