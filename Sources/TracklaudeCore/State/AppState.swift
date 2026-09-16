@@ -30,6 +30,14 @@ public enum AppState: Equatable, Sendable {
         }
     }
 
+    /// Whether a fetch result may be applied: the three states that came from a sign-in.
+    public var isSignedIn: Bool {
+        switch self {
+        case .signedOut, .signingIn: return false
+        case .polling, .stale, .backingOff: return true
+        }
+    }
+
     /// Backing off is rate limiting from the user's point of view.
     public var staleReason: StaleReason? {
         switch self {

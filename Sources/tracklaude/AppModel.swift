@@ -3,34 +3,26 @@ import Observation
 import os
 import TracklaudeCore
 
-/// Where the app stands with Anthropic. Grows into the spec's full state machine in later tickets.
-enum AuthState: Equatable {
-    case signedOut
-    case signingIn
-    case signedIn
-    case failed(String)
-}
-
 @Observable
 @MainActor
 final class AppModel {
-    private(set) var auth: AuthState = .signedOut
-    /// The latest successful fetch; the menu bar renders its 5-hour Window.
-    private(set) var snapshot: Snapshot?
-    /// Plain-English reason the last fetch produced no Snapshot. Ticket 05 turns this into Stale.
-    private(set) var fetchFailure: String?
+    /// The one state machine (spec › Architecture). Views render it; `AppState.applying`
+    /// and the sign-in flow are the only things that move it.
+    private(set) var state: AppState = .signedOut
+    /// Why the last sign-in attempt failed; shown on the signed-out banner, cleared on the next attempt.
+    private(set) var signInFailure: String?
     /// When the last fetch was issued (not when it landed): the cadence and the Refresh
     /// cooldown both count from here, so an in-flight fetch is never doubled.
     private(set) var lastFetch: Date?
     /// Drives the Refresh button's 5 s cooldown; automatic fetches do not touch it.
     private(set) var lastManualRefresh: Date?
-    /// The clock the menu bar renders with. Advanced on every fetch, so Time-to-Reset lags
-    /// the wall clock by at most one interval even when a fetch fails. The popover ticks
-    /// its own clock once a second while open.
+    /// The clock the menu bar renders with. Advanced on every fetch and at least every 30 s
+    /// through a long backoff, so Time-to-Reset never lags the wall clock by more than one
+    /// interval. The popover ticks its own clock once a second while open.
     private(set) var now = Date()
 
-    /// Memory only — never persisted (ADR-0001).
-    private var accessToken: String?
+    /// Holds the access token (memory only, ADR-0001) and does the 401 → refresh → retry dance.
+    private let session: UsageSession
     private var signInTask: Task<Void, Never>?
     private var isAsleep = false
     /// Sleeps until the next cadence slot, then issues a fetch. Cancelled on every re-plan.
@@ -52,18 +44,33 @@ final class AppModel {
     ) {
         self.store = store
         self.transport = transport
+        self.session = UsageSession(store: store, transport: transport)
         observeSleepAndWake()
         Task { await restoreCredential() }
     }
 
+    var snapshot: Snapshot? { state.lastSnapshot }
+
     // MARK: - Polling
 
-    /// Why: signed in *and* holding an access token. During restore `auth` flips to
-    /// `.signedIn` before the refresh grant lands; a popover open in that window must not
-    /// stamp a phantom fetch that delays the real first one by a whole interval.
+    /// What the scheduler needs to know. An expired session does not poll: every fetch
+    /// would fail the same refresh, and the fix (Sign in) is on the banner.
     private var pollState: PollState {
-        guard auth == .signedIn, accessToken != nil else { return .signedOut }
-        return isAsleep ? .asleep : .active
+        switch state {
+        case .signedOut, .signingIn, .stale(_, .sessionExpired):
+            return .signedOut
+        case .backingOff(_, let until, _):
+            return isAsleep ? .asleep : .backingOff(until: until)
+        case .polling, .stale:
+            return isAsleep ? .asleep : .active
+        }
+    }
+
+    /// Whether the footer shows a Refresh button at all.
+    var canRefresh: Bool { pollState != .signedOut }
+
+    func isRefreshAllowed(now: Date) -> Bool {
+        PollScheduler.isManualRefreshAllowed(state: pollState, now: now, lastManualRefresh: lastManualRefresh)
     }
 
     /// Re-plans the next fetch for `trigger`: right now, at a later slot, or not at all.
@@ -84,9 +91,16 @@ final class AppModel {
         timerTask = Task { [weak self] in
             // Why: the default tolerance lets the system coalesce timers and measured ~4 %
             // late (≈ 31 s cadence). The only error `sleep` throws is cancellation, handled
-            // by the guard below.
-            try? await Task.sleep(for: .seconds(delay), tolerance: Self.timerTolerance)
-            guard !Task.isCancelled else { return }
+            // by the guard below. Sleeping in ≤ 30 s chunks keeps the menu-bar clock moving
+            // through a backoff of up to 10 min.
+            var remaining = delay
+            while remaining > 0 {
+                let chunk = min(remaining, PollScheduler.interval)
+                try? await Task.sleep(for: .seconds(chunk), tolerance: Self.timerTolerance)
+                guard !Task.isCancelled, let self else { return }
+                remaining -= chunk
+                if remaining > 0 { self.now = Date() }
+            }
             self?.startFetch(.timer)
         }
     }
@@ -98,7 +112,8 @@ final class AppModel {
         timerTask = nil
     }
 
-    /// The Refresh button. The scheduler applies the cooldown; the view disables the button.
+    /// The Refresh button and the banner's Retry. The scheduler applies the cooldown and
+    /// the backoff; the view disables the button.
     func refresh() {
         poll(.manualRefresh)
     }
@@ -119,6 +134,43 @@ final class AppModel {
             guard generation == fetchGeneration else { return }
             fetchTask = nil
             poll(.timer)
+        }
+    }
+
+    /// `issuedAt` is the same instant as `lastFetch`, so the footer's "Updated" age and the
+    /// Refresh cooldown never disagree by a request's duration.
+    private func fetchUsage(issuedAt: Date) async {
+        let result = await session.fetch(now: issuedAt)
+        // A fetch abandoned at sleep is not a failure the user needs to see.
+        guard !Task.isCancelled else { return }
+        // Why: the fetch may outlive the state that issued it (a sign-in started meanwhile);
+        // its result must not drag the app back into a signed-in state.
+        guard state.isSignedIn else { return }
+        if case .failed(let failure) = result {
+            Self.pollLog.error("Usage fetch failed: \(String(describing: failure), privacy: .public)")
+        }
+        transition(to: state.applying(result, now: Date()))
+    }
+
+    /// Logs a line only when the case or reason changes, not on every 30 s Snapshot.
+    private func transition(to next: AppState) {
+        let before = Self.describe(state)
+        let after = Self.describe(next)
+        state = next
+        if before != after {
+            Self.pollLog.notice("State: \(before, privacy: .public) → \(after, privacy: .public)")
+        }
+    }
+
+    /// Case and reason only — never a Snapshot's numbers, never a token.
+    private static func describe(_ state: AppState) -> String {
+        switch state {
+        case .signedOut: return "signedOut"
+        case .signingIn: return "signingIn"
+        case .polling: return "polling"
+        case .stale(_, let reason): return "stale(\(reason))"
+        case .backingOff(_, let until, let count):
+            return "backingOff(until \(until.formatted(date: .omitted, time: .standard)), 429 #\(count))"
         }
     }
 
@@ -157,46 +209,16 @@ final class AppModel {
     // MARK: - Session
 
     /// On launch: a stored Credential means the user is signed in without asking again.
-    /// Only the Credential survives a relaunch, so the first fetch starts with a refresh.
+    /// Only the Credential survives a relaunch; the session refreshes before its first fetch.
     private func restoreCredential() async {
         do {
-            guard let credential = try await store.load() else { return }
-            auth = .signedIn
-            try await refreshAccessToken(with: credential)
+            guard try await store.load() != nil else { return }
+            transition(to: .polling(nil))
             poll(.timer)
         } catch {
             // Status text only — never the Credential.
-            Self.log.error("Could not restore the session: \(error.localizedDescription, privacy: .public)")
-            auth = .failed(error.localizedDescription)
-        }
-    }
-
-    /// Trades the Credential for an access token; a rotated Credential is stored at once,
-    /// because the old one is dead the moment the server rotates it.
-    private func refreshAccessToken(with credential: Credential) async throws {
-        let tokens = try await OAuthRefresh.refresh(credential, transport: transport)
-        accessToken = tokens.accessToken
-        if tokens.refreshToken != credential.refreshToken {
-            try await store.save(Credential(refreshToken: tokens.refreshToken))
-        }
-    }
-
-    /// `issuedAt` is the same instant as `lastFetch`, so the footer's "Updated" age and the
-    /// Refresh cooldown never disagree by a request's duration.
-    private func fetchUsage(issuedAt: Date) async {
-        guard let accessToken else {
-            // Unreachable while `pollState` requires a token; loud if that ever changes.
-            Self.log.fault("Usage fetch attempted without an access token")
-            return
-        }
-        do {
-            snapshot = try await UsageFetch.perform(accessToken: accessToken, transport: transport, now: issuedAt)
-            fetchFailure = nil
-        } catch {
-            // A fetch abandoned at sleep is not a failure the user needs to see.
-            guard !Task.isCancelled else { return }
-            Self.log.error("Usage fetch failed: \(error.localizedDescription, privacy: .public)")
-            fetchFailure = error.localizedDescription
+            Self.log.error("Could not read the saved sign-in: \(error.localizedDescription, privacy: .public)")
+            signInFailure = "Could not read the saved sign-in: \(error.localizedDescription)"
         }
     }
 
@@ -204,9 +226,22 @@ final class AppModel {
     private static let log = Logger(subsystem: subsystem, category: "auth")
     private static let pollLog = Logger(subsystem: subsystem, category: "poll")
 
+    /// The banner's one button.
+    func perform(_ action: PopoverBanner.Action) {
+        switch action {
+        case .signIn: signIn()
+        case .retry: refresh()
+        case .cancelSignIn: cancelSignIn()
+        }
+    }
+
     func signIn() {
         guard signInTask == nil else { return }
-        auth = .signingIn
+        // Why: the state a cancelled sign-in returns to. From an expired session that is the
+        // expired session, readout and all — not a blank signed-out.
+        let resumeState = state
+        signInFailure = nil
+        transition(to: .signingIn)
         let flow = SignIn(
             listener: LoopbackCallbackServer(),
             openURL: { url in
@@ -219,15 +254,19 @@ final class AppModel {
             defer { signInTask = nil }
             do {
                 let tokens = try await flow.run()
-                accessToken = tokens.accessToken
-                auth = .signedIn
+                await session.adopt(accessToken: tokens.accessToken)
+                transition(to: .polling(resumeState.lastSnapshot))
                 poll(.timer)
             } catch {
                 // Why: a cancelled URLSession request surfaces as URLError.cancelled, not
                 // CancellationError, so the task flag is the reliable signal for "user cancelled".
-                auth = Task.isCancelled || error is CancellationError
-                    ? .signedOut
-                    : .failed(error.localizedDescription)
+                if Task.isCancelled || error is CancellationError {
+                    transition(to: resumeState)
+                } else {
+                    Self.log.error("Sign-in failed: \(error.localizedDescription, privacy: .public)")
+                    signInFailure = error.localizedDescription
+                    transition(to: .signedOut)
+                }
             }
         }
     }

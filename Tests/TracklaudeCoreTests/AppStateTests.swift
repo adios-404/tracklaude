@@ -87,6 +87,15 @@ func lastSnapshotAccessor() {
     #expect(AppState.backingOff(older, until: now, consecutiveRateLimits: 1).lastSnapshot == older)
 }
 
+@Test("only the states that came from a sign-in count as signed in")
+func isSignedInAccessor() {
+    #expect(AppState.signedOut.isSignedIn == false)
+    #expect(AppState.signingIn.isSignedIn == false)
+    #expect(AppState.polling(nil).isSignedIn == true)
+    #expect(AppState.stale(nil, .sessionExpired).isSignedIn == true)
+    #expect(AppState.backingOff(nil, until: now, consecutiveRateLimits: 1).isSignedIn == true)
+}
+
 @Test("backing off reads as stale for rate limiting; healthy and signed-out states have no reason")
 func staleReasonAccessor() {
     #expect(AppState.backingOff(nil, until: now, consecutiveRateLimits: 1).staleReason == .rateLimited)
