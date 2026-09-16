@@ -22,3 +22,16 @@ for a dead Credential (`invalid_grant`); today `AppModel.restoreCredential` show
 "Sign-in failed" with an HTTP-status string — the spec wants a plain "session expired, sign in
 again" (refresh tokens die after ~7 days idle). The recorded `usage-429.http` carries
 `Retry-After: 300`; honour it over the 60 s first step.
+
+**2026-09-16 — handoff from ticket 04.** Polling lives in `AppModel.poll(_:)` (one entry point,
+pure `PollScheduler` decides). To add `backingOff(until)`: give `PollState` a case carrying the
+date and have `nextFetch` return it for `.timer` (and probably for `.popoverOpened` / `.manualRefresh`
+too — a Refresh during backoff must not extend the lockout). `UsageFetchError.rateLimited(retryAfter:)`
+already carries `Retry-After`. **Budget reality:** 23 requests / 10 min across two access tokens →
+429 + `Retry-After: 300`, so the limit is per account and ~20–25 / 10 min; at the owner's chosen
+30 s cadence the timer alone is at the ceiling, and your backoff will be exercised in normal use. Observed: retries during a `Retry-After: 300`
+lockout do not extend it (cleared at +300 s to the second despite ~12 requests inside it), so
+`backingOff(until:)` should simply trust the header.
+Sleep/wake has not been exercised on a real sleep yet — close the lid once during your Wi-Fi
+check and look for `Sleeping: polling suspended` / `Woke: polling resumes` / `fetch issued (wake)`.
+`fetchFailure: String?` and `AuthState` are still the interim shape for you to replace.

@@ -18,3 +18,7 @@ The real account reports a `Fable` per-model Window at 0 % with `is_active: fals
 does not read `is_active` yet — add it if you decide inactive 0 % rows should hide. `PopoverView`
 holds a placeholder readout to delete. `MenuBarText.render(window:remaining:now:)` is the
 per-Window text builder you can reuse for row percentages.
+
+**2026-09-16 — from ticket 04.** The popover body is wrapped in `TimelineView(.periodic(by: 1))`;
+pass `context.date` as `now` into your view-model so rows and footer tick together. The footer
+row (`UpdatedAgoText` + Refresh + Quit) already exists in `PopoverView.footer(now:)`.
