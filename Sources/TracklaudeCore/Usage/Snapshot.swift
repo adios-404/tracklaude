@@ -11,6 +11,12 @@ public struct Window: Equatable, Sendable {
         self.utilization = utilization
         self.resetsAt = resetsAt
     }
+
+    /// The whole-number percentage the user reads: the Utilization, or `100 − utilization`
+    /// in remaining mode. One rounding rule for the menu bar and every popover row.
+    public func percent(remaining: Bool) -> Int {
+        Int((remaining ? 100 - utilization : utilization).rounded())
+    }
 }
 
 /// A per-model 7-day Window, named by the model's display name (e.g. "Opus").

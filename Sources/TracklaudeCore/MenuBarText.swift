@@ -49,7 +49,7 @@ public enum MenuBarText {
     ///   - remaining: show `100 − utilization` instead of the Utilization.
     public static func render(window: Window?, remaining: Bool, now: Date) -> String {
         guard let window else { return noWindow }
-        let percent = Int((remaining ? 100 - window.utilization : window.utilization).rounded())
+        let percent = window.percent(remaining: remaining)
         guard let reset = window.resetsAt else { return "\(percent)%" }
         return "\(percent)% · \(TimeToReset.format(reset: reset, now: now))"
     }
