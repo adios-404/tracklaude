@@ -14,7 +14,7 @@ struct TracklaudeApp: App {
             HStack(spacing: 4) {
                 Image(systemName: "gauge.with.dots.needle.bottom.50percent")
                 // No Snapshot yet (ticket 03), so the readout is always the "no Window" dash.
-                Text(MenuBarText.render(fiveHour: nil))
+                Text(MenuBarText.render(fiveHour: nil, remaining: false, now: Date()))
             }
         }
         .menuBarExtraStyle(.window)
