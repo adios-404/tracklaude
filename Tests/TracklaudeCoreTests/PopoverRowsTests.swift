@@ -14,6 +14,15 @@ private func render(_ snapshot: Snapshot, remaining: Bool = false) -> PopoverRea
     PopoverRows.render(snapshot: snapshot, remaining: remaining, now: now, locale: locale, timeZone: utc)
 }
 
+/// The rows of a Snapshot that is expected to have some; records a failure otherwise.
+private func rows(of snapshot: Snapshot, remaining: Bool = false) -> [PopoverRow] {
+    guard case .rows(let rows) = render(snapshot, remaining: remaining) else {
+        Issue.record("expected rows")
+        return []
+    }
+    return rows
+}
+
 @Test("rows come in the order 5-hour, 7-day, then per-model Windows sorted by name")
 func rowOrder() {
     let snapshot = Snapshot(
@@ -25,7 +34,7 @@ func rowOrder() {
         ],
         fetchedAt: now
     )
-    guard case .rows(let rows) = render(snapshot) else { Issue.record("expected rows"); return }
+    let rows = rows(of: snapshot)
     #expect(rows.map(\.name) == ["5-hour", "7-day", "Opus", "Sonnet"])
     #expect(rows.map(\.percent) == [42, 46, 61, 8])
 }
@@ -37,14 +46,14 @@ func noPerModelRows() {
         sevenDay: Window(utilization: 46, resetsAt: inThreeDays),
         fetchedAt: now
     )
-    guard case .rows(let rows) = render(snapshot) else { Issue.record("expected rows"); return }
+    let rows = rows(of: snapshot)
     #expect(rows.map(\.name) == ["5-hour", "7-day"])
 }
 
 @Test("a Window Anthropic did not report gets no row")
 func missingStandardWindowIsSkipped() {
     let snapshot = Snapshot(fiveHour: nil, sevenDay: Window(utilization: 46, resetsAt: inThreeDays), fetchedAt: now)
-    guard case .rows(let rows) = render(snapshot) else { Issue.record("expected rows"); return }
+    let rows = rows(of: snapshot)
     #expect(rows.map(\.name) == ["7-day"])
 }
 
@@ -52,12 +61,12 @@ func missingStandardWindowIsSkipped() {
 func allNullSnapshot() {
     let snapshot = Snapshot(fiveHour: nil, sevenDay: nil, fetchedAt: now)
     #expect(render(snapshot) == .noWindows)
-    #expect(PopoverReadout.noWindows.message == "No usage windows reported")
+    #expect(PopoverReadout.noWindowsMessage == "No usage windows reported")
 }
 
 private func fiveHourRow(utilization: Double, resetsAt: Date? = inTwoHours, remaining: Bool = false) -> PopoverRow {
     let snapshot = Snapshot(fiveHour: Window(utilization: utilization, resetsAt: resetsAt), sevenDay: nil, fetchedAt: now)
-    guard case .rows(let rows) = render(snapshot, remaining: remaining), let row = rows.first else {
+    guard let row = rows(of: snapshot, remaining: remaining).first else {
         Issue.record("expected one row")
         return PopoverRow(name: "", percent: 0, tone: .normal, resetsIn: nil, resetsAt: nil)
     }
@@ -127,6 +136,12 @@ func remainingModeFlipsEveryRow() {
         perModel: [ModelWindow(model: "Opus", window: Window(utilization: 61, resetsAt: inThreeDays))],
         fetchedAt: now
     )
-    guard case .rows(let rows) = render(snapshot, remaining: true) else { Issue.record("expected rows"); return }
+    let rows = rows(of: snapshot, remaining: true)
     #expect(rows.map(\.percent) == [58, 54, 39])
+}
+
+@Test("used and remaining always sum to 100, even for a half-percent Utilization")
+func modesSumToOneHundred() {
+    #expect(fiveHourRow(utilization: 42.5).percent == 43)
+    #expect(fiveHourRow(utilization: 42.5, remaining: true).percent == 57)
 }

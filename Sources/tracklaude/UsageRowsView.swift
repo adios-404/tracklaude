@@ -15,12 +15,12 @@ struct UsageRowsView: View {
             switch readout {
             case .rows(let rows):
                 VStack(alignment: .leading, spacing: Self.rowSpacing) {
-                    ForEach(rows, id: \.name) { row in
+                    ForEach(rows) { row in
                         UsageRowView(row: row)
                     }
                 }
             case .noWindows:
-                Text(readout.message ?? "")
+                Text(PopoverReadout.noWindowsMessage)
                     .foregroundStyle(.secondary)
             }
         }
@@ -66,6 +66,8 @@ struct UsageBar: View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule().fill(.quaternary)
+                // Why: the spec says Utilization is 0–100, but a fill wider than its track
+                // would overflow the row; clamping costs nothing and keeps the layout honest.
                 Capsule()
                     .fill(color)
                     .frame(width: geometry.size.width * min(max(fraction, 0), 1))

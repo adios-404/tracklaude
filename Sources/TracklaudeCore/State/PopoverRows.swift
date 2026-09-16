@@ -1,13 +1,15 @@
 import Foundation
 
 /// One line of the popover: a Window's name and what the user reads about it.
-public struct PopoverRow: Equatable, Sendable {
+public struct PopoverRow: Equatable, Sendable, Identifiable {
     /// The bar's colour band (spec › Popover: ≥ 90 red, ≥ 80 orange, else accent).
     public enum Tone: Equatable, Sendable {
         case normal, warning, critical
     }
 
     public let name: String
+    /// Names are unique within a Snapshot: two fixed ones plus model display names.
+    public var id: String { name }
     /// The percentage shown — Utilization, or `100 − utilization` in remaining mode.
     public let percent: Int
     /// Decided by Utilization, never by the flipped number: 10 % left is as red as 90 % used.
@@ -33,12 +35,8 @@ public enum PopoverReadout: Equatable, Sendable {
     /// rather than show an empty popover.
     case noWindows
 
-    public var message: String? {
-        switch self {
-        case .rows: return nil
-        case .noWindows: return "No usage windows reported"
-        }
-    }
+    /// The one line shown for `.noWindows`.
+    public static let noWindowsMessage = "No usage windows reported"
 }
 
 /// Builds the popover rows from a Snapshot (spec › Popover). Pure: locale and time zone
@@ -64,13 +62,11 @@ public enum PopoverRows {
         return rows.isEmpty ? .noWindows : .rows(rows)
     }
 
-    private static let oneDay: TimeInterval = 86_400
-
     /// The locale's short time (`3:45 PM`, `15:45`); the weekday is added only when the
     /// Reset is more than a day away, when the time alone would be ambiguous.
     private static func absolute(_ reset: Date, now: Date, locale: Locale, timeZone: TimeZone) -> String {
         let time = Date.FormatStyle(locale: locale, timeZone: timeZone).hour().minute()
-        let isBeyondOneDay = reset.timeIntervalSince(now) > oneDay
+        let isBeyondOneDay = reset.timeIntervalSince(now) > TimeToReset.day
         return reset.formatted(isBeyondOneDay ? time.weekday(.abbreviated) : time)
     }
 

@@ -7,7 +7,8 @@ import Foundation
 public enum TimeToReset {
     private static let minute: TimeInterval = 60
     private static let hour: TimeInterval = 3600
-    private static let day: TimeInterval = 86_400
+    /// Internal: the popover's "add the weekday beyond a day" rule shares this boundary.
+    static let day: TimeInterval = 86_400
 
     public static func format(reset: Date, now: Date) -> String {
         let remaining = reset.timeIntervalSince(now)

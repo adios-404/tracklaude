@@ -15,7 +15,10 @@ public struct Window: Equatable, Sendable {
     /// The whole-number percentage the user reads: the Utilization, or `100 − utilization`
     /// in remaining mode. One rounding rule for the menu bar and every popover row.
     public func percent(remaining: Bool) -> Int {
-        Int((remaining ? 100 - utilization : utilization).rounded())
+        // Why: round the Utilization first, then subtract, so the two modes always sum to
+        // 100 — rounding each side separately makes 42.5 read 43 used and 58 remaining.
+        let used = Int(utilization.rounded())
+        return remaining ? 100 - used : used
     }
 }
 
