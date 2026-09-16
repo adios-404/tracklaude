@@ -30,3 +30,13 @@ _Avoid_: session key, token (ambiguous), API key
 **Snapshot**:
 One successful fetch of all Windows' Utilization and Reset at a point in time.
 _Avoid_: response, reading, sample
+
+**Alert**:
+A macOS notification fired once per Window per cycle when Utilization first crosses
+80, 90 or 100, and once when the 5-hour Window Resets.
+_Avoid_: warning, notification (generic), threshold
+
+**Stale**:
+The state where the last Snapshot is still displayed (dimmed, with a caution glyph and a
+short reason) because a newer one could not be fetched.
+_Avoid_: offline, error state, disconnected
