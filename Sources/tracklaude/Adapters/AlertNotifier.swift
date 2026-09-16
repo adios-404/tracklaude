@@ -44,7 +44,13 @@ final class AlertNotifier {
 
     func permission() async -> AlertPermission {
         guard let center else { return .denied }
-        switch await center.notificationSettings().authorizationStatus {
+        // Why: `notificationSettings()` hands back a non-Sendable object, which CI's Swift
+        // 6.0 refuses to bring onto the main actor; the callback form lets only the status
+        // (a plain enum) cross.
+        let status = await withCheckedContinuation { continuation in
+            center.getNotificationSettings { continuation.resume(returning: $0.authorizationStatus) }
+        }
+        switch status {
         case .authorized, .provisional: return .granted
         case .denied: return .denied
         case .notDetermined: return .undetermined
