@@ -32,7 +32,8 @@ func signInStoresRefreshTokenAsCredential() async throws {
 
     _ = try await signIn.run()
 
-    #expect(try await store.load() == Credential(refreshToken: "sk-ant-ort01-REFRESH"))
+    let stored = try await store.load()
+    #expect(stored == Credential(refreshToken: "sk-ant-ort01-REFRESH"))
 }
 
 @Test("the browser is sent to an authorize URL whose redirect uses the bound port and whose state the listener expects")
@@ -50,7 +51,8 @@ func signInOpensBrowserWiredToTheListener() async throws {
     let query = Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value) })
     #expect(query["redirect_uri"] == "http://localhost:1458/callback")
     #expect(query["state"] != nil)
-    #expect(query["state"] == (await listener.expectedState))
+    let expectedState = await listener.expectedState
+    #expect(query["state"] == expectedState)
 }
 
 @Test("when the code exchange fails nothing is stored")
@@ -60,5 +62,6 @@ func failedExchangeStoresNothing() async throws {
 
     await #expect(throws: OAuthTokenError.httpStatus(400)) { try await signIn.run() }
 
-    #expect(try await store.load() == nil)
+    let stored = try await store.load()
+    #expect(stored == nil)
 }
