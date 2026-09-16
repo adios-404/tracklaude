@@ -63,7 +63,8 @@ public struct AlertState: Equatable, Sendable {
         }
     }
 
-    /// Keyed by Window name. Only the Windows in the last Snapshot are kept.
+    /// Keyed by Window name. A Window missing from one Snapshot keeps its record, so a
+    /// Reset that lands during the gap still alerts when the Window comes back.
     public let records: [String: WindowRecord]
 
     public init(records: [String: WindowRecord] = [:]) {
@@ -83,17 +84,13 @@ public enum AlertDecision {
     static let cycleTolerance: TimeInterval = 60
 
     public static func decide(previous: AlertState, snapshot: Snapshot) -> (alerts: [Alert], state: AlertState) {
-        // Same order as the popover rows: 5-hour, 7-day, then per-model by name. Only the
-        // 5-hour Window gets a Reset Alert (spec › Alerts).
-        let standard: [(String, Window?)] = [("5-hour", snapshot.fiveHour), ("7-day", snapshot.sevenDay)]
-        let perModel = snapshot.perModel.sorted { $0.model < $1.model }.map { ($0.model, Optional($0.window)) }
+        // Same order as the popover rows. Only the 5-hour Window gets a Reset Alert (spec › Alerts).
         var alerts: [Alert] = []
-        var records: [String: AlertState.WindowRecord] = [:]
-        for (name, window) in standard + perModel {
-            guard let window else { continue }
+        var records = previous.records
+        for (name, window) in snapshot.windowsByName {
             let (fired, record) = observe(
                 window, named: name, previous: previous.records[name], fetchedAt: snapshot.fetchedAt,
-                alertsOnReset: name == "5-hour"
+                alertsOnReset: name == Snapshot.fiveHourName
             )
             alerts += fired
             records[name] = record
@@ -115,24 +112,22 @@ public enum AlertDecision {
         guard let previous else {
             return ([], AlertState.WindowRecord(resetsAt: window.resetsAt, percent: percent, fired: Set(reached)))
         }
-        let isNewCycle = !isSameCycle(previous.resetsAt, window.resetsAt)
+        let isNewCycle = isNewCycle(from: previous.resetsAt, to: window.resetsAt)
         let alreadyFired = isNewCycle ? [] : previous.fired
-        var alerts: [Alert] = []
-        if isNewCycle, alertsOnReset, previous.percent >= resetAlertThreshold {
-            alerts.append(alert(.reset))
-        }
-        alerts += reached.filter { !alreadyFired.contains($0) }.map { alert(.threshold($0)) }
+        let resetAlert = isNewCycle && alertsOnReset && previous.percent >= resetAlertThreshold ? [alert(.reset)] : []
+        let thresholdAlerts = reached.filter { !alreadyFired.contains($0) }.map { alert(.threshold($0)) }
         let record = AlertState.WindowRecord(
-            resetsAt: window.resetsAt, percent: percent, fired: alreadyFired.union(reached)
+            // Why: a Reset that flaps to nil keeps the last known one, so the cycle's identity
+            // survives the flap and the fired set is not cleared when it comes back.
+            resetsAt: window.resetsAt ?? previous.resetsAt, percent: percent, fired: alreadyFired.union(reached)
         )
-        return (alerts, record)
+        return (resetAlert + thresholdAlerts, record)
     }
 
-    private static func isSameCycle(_ before: Date?, _ after: Date?) -> Bool {
-        switch (before, after) {
-        case (nil, nil): return true
-        case (let before?, let after?): return abs(after.timeIntervalSince(before)) <= cycleTolerance
-        default: return false
-        }
+    /// Only a Reset that moved by more than the tolerance is a new cycle. A missing Reset on
+    /// either side is no evidence of one.
+    private static func isNewCycle(from before: Date?, to after: Date?) -> Bool {
+        guard let before, let after else { return false }
+        return abs(after.timeIntervalSince(before)) > cycleTolerance
     }
 }

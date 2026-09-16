@@ -45,13 +45,8 @@ public enum PopoverRows {
     public static func render(
         snapshot: Snapshot, remaining: Bool, now: Date, locale: Locale, timeZone: TimeZone
     ) -> PopoverReadout {
-        let standard: [(String, Window?)] = [("5-hour", snapshot.fiveHour), ("7-day", snapshot.sevenDay)]
-        let perModel = snapshot.perModel
-            .sorted { $0.model < $1.model }
-            .map { ($0.model, Optional($0.window)) }
-        let rows = (standard + perModel).compactMap { name, window -> PopoverRow? in
-            guard let window else { return nil }
-            return PopoverRow(
+        let rows = snapshot.windowsByName.map { name, window in
+            PopoverRow(
                 name: name,
                 percent: window.percent(remaining: remaining),
                 tone: tone(for: window),

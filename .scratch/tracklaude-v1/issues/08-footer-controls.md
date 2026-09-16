@@ -11,3 +11,13 @@
 - [ ] Sign in after Sign out works in the same run
 - [ ] Quit exits cleanly with no lingering process
 - [ ] Footer fits on one line at the default popover width
+
+## Comments
+
+**2026-09-17 — handoff from ticket 07.** The Alerts toggle already exists as
+`PopoverView.alertsToggle` (checkbox + denied line with an "Open System Settings" button), bound
+to `AppModel.alertsEnabled` (UserDefaults `alertsEnabled`). Move it into the footer if the spec's
+one-line footer is what you build; the denied line needs its own row either way. On Sign out,
+also reset `AppModel.alertState = AlertState()` next to dropping the session, so a later sign-in
+gets the quiet first sighting rather than a Reset Alert from another account's Windows. The
+permission re-read is `AppModel.refreshAlertPermission()`, called from the popover's `onAppear`.

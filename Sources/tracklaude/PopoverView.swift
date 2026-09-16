@@ -89,21 +89,29 @@ struct PopoverView: View {
         }
     }
 
-    /// Alerts on ↔ off (spec › Alerts). When macOS has refused permission the toggle alone
-    /// would lie — say so, and point at the one place that can fix it.
+    /// Alerts on ↔ off (spec › Alerts). While macOS has not granted permission the toggle
+    /// alone would lie — say so, and point at the one place that can fix it.
     @ViewBuilder
     private var alertsToggle: some View {
         Toggle("Alerts at 80, 90 and 100%", isOn: $model.alertsEnabled)
             .toggleStyle(.checkbox)
-        if model.alertsEnabled, model.alertPermission == .denied {
+        if model.alertsEnabled, let problem = Self.permissionProblem(model.alertPermission) {
             HStack(alignment: .firstTextBaseline) {
-                Label("Notifications are off for tracklaude.", systemImage: "exclamationmark.triangle")
+                Label(problem, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Open System Settings") { NSWorkspace.shared.open(AlertNotifier.systemSettingsURL) }
                     .controlSize(.small)
             }
+        }
+    }
+
+    private static func permissionProblem(_ permission: AlertPermission) -> String? {
+        switch permission {
+        case .granted: return nil
+        case .denied: return "Notifications are off for tracklaude."
+        case .undetermined: return "Notifications are not allowed yet."
         }
     }
 

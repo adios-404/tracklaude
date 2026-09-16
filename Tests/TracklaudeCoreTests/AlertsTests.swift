@@ -135,3 +135,19 @@ func roundedUtilization() {
     let fired = alerts(after: [snapshot(fiveHour: 70), snapshot(fiveHour: 89.5)])
     #expect(fired.map(\.kind) == [.threshold(80), .threshold(90)])
 }
+
+@Test("a Window missing from one Snapshot keeps its cycle, so a Reset during the gap still alerts")
+func absentWindowKeepsItsRecord() {
+    // Story 11: Anthropic can report no active 5-hour Window for a poll.
+    let gap = Snapshot(fiveHour: nil, sevenDay: nil, fetchedAt: now)
+    let fired = alerts(after: [snapshot(fiveHour: 70), snapshot(fiveHour: 85), gap, snapshot(fiveHour: 2, resetsAt: nextReset)])
+    #expect(fired.map(\.kind) == [.reset])
+}
+
+@Test("a Reset that flaps to nil and back is not a new cycle")
+func nilResetIsNotANewCycle() {
+    let fired = alerts(after: [
+        snapshot(fiveHour: 70), snapshot(fiveHour: 85), snapshot(fiveHour: 85, resetsAt: nil), snapshot(fiveHour: 86),
+    ])
+    #expect(fired.isEmpty)
+}

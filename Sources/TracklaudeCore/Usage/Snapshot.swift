@@ -47,4 +47,16 @@ public struct Snapshot: Equatable, Sendable {
         self.perModel = perModel
         self.fetchedAt = fetchedAt
     }
+
+    /// The name of the 5-hour Window as the popover and the Alerts call it.
+    public static let fiveHourName = "5-hour"
+    public static let sevenDayName = "7-day"
+
+    /// Every reported Window with its display name, in the order the popover lists them:
+    /// 5-hour, 7-day, then per-model by name. Names are unique within a Snapshot.
+    public var windowsByName: [(name: String, window: Window)] {
+        let standard = [(Self.fiveHourName, fiveHour), (Self.sevenDayName, sevenDay)]
+        let perModel = perModel.sorted { $0.model < $1.model }.map { ($0.model, Optional($0.window)) }
+        return (standard + perModel).compactMap { name, window in window.map { (name, $0) } }
+    }
 }

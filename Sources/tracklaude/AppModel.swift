@@ -30,14 +30,19 @@ final class AppModel {
     var alertsEnabled: Bool {
         didSet {
             defaults.set(alertsEnabled, forKey: Self.alertsEnabledKey)
-            if alertsEnabled { Task { await requestAlertPermission() } }
+            requestAlertPermissionIfEnabled()
         }
     }
-    /// What macOS answered; the popover says so and links to System Settings when denied.
+    /// What macOS answered; the popover says so and links to System Settings when it is
+    /// anything but granted.
     private(set) var alertPermission: AlertPermission = .undetermined
     /// What has fired this cycle, per Window. Tracked even while Alerts are off, so
     /// switching them on mid-cycle cannot replay crossings the user already lived through.
     private var alertState = AlertState()
+    /// The permission prompt in flight, if any; a delivery waits for its answer.
+    private var permissionRequest: Task<Void, Never>?
+    /// The last delivery; the next one queues behind it so Alerts reach macOS in order.
+    private var delivery: Task<Void, Never>?
 
     /// Holds the Credential and access token (memory only, ADR-0001) and does the
     /// 401 → refresh → retry dance. `nil` exactly while not signed in.
@@ -75,7 +80,7 @@ final class AppModel {
         self.alertsEnabled = defaults.bool(forKey: Self.alertsEnabledKey)
         observeSleepAndWake()
         Task { await restoreCredential() }
-        if alertsEnabled { Task { await requestAlertPermission() } }
+        requestAlertPermissionIfEnabled()
     }
 
     var snapshot: Snapshot? { state.lastSnapshot }
@@ -193,8 +198,10 @@ final class AppModel {
 
     // MARK: - Alerts
 
-    private func requestAlertPermission() async {
-        record(permission: await notifier.requestPermission())
+    /// Off means macOS is never asked (spec › Alerts). macOS prompts once and remembers.
+    private func requestAlertPermissionIfEnabled() {
+        guard alertsEnabled else { return }
+        permissionRequest = Task { record(permission: await notifier.requestPermission()) }
     }
 
     /// Re-reads the answer without prompting. The popover calls this on open, so a user
@@ -214,11 +221,23 @@ final class AppModel {
     /// Hands a Snapshot's Alerts to the notification center. Nothing leaves while the
     /// toggle is off or macOS has not granted permission; the state was updated regardless.
     private func deliver(_ alerts: [Alert]) {
-        guard alertsEnabled, alertPermission == .granted, !alerts.isEmpty else { return }
+        guard alertsEnabled, !alerts.isEmpty else { return }
         for alert in alerts {
             Self.alertLog.notice("Alert: \(alert.title, privacy: .public)")
         }
-        Task { for alert in alerts { await notifier.deliver(alert) } }
+        delivery = Task { [previous = delivery, permissionRequest] in
+            await previous?.value
+            // Why: ask macOS now rather than trust the cached answer — a grant made in
+            // System Settings while the popover was closed, or a prompt still open when
+            // this fetch landed, would otherwise cost the user this cycle's Alerts.
+            await permissionRequest?.value
+            record(permission: await notifier.permission())
+            guard alertsEnabled, alertPermission == .granted else {
+                Self.alertLog.notice("Not delivered: permission \(String(describing: self.alertPermission), privacy: .public)")
+                return
+            }
+            for alert in alerts { await notifier.deliver(alert) }
+        }
     }
 
     /// Logs a line only when the case or reason changes, not on every 30 s Snapshot.
