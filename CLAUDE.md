@@ -28,7 +28,8 @@ The owner works by `/clear` → `/implement` → repeat. When `/implement` (or
 2. **Seams are pre-agreed.** The ticket's checklist plus `spec.md › Testing Decisions` define
    what is tested and what is not (real Keychain, real URLSession, socket handling are not).
    Skip the TDD skill's "confirm seams with the user" step.
-3. **Verify on the real app** with `make run`, then `log show --predicate 'process == "tracklaude"'`
+3. **Verify on the real app** with `make run` (the first launch of every rebuild asks the
+   owner for their password twice — Keychain ACL vs. ad-hoc cdhash, not a bug), then `log show --predicate 'process == "tracklaude"'`
    and `security find-generic-password -s com.adios404.tracklaude` (never `-w`). Try the
    computer-use tools for clicking the menu-bar item before asking the owner to. Ask the
    owner only for things that must be theirs: the browser OAuth consent, and reading a

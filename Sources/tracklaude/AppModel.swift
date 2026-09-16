@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import os
 import TracklaudeCore
 
 /// Where the app stands with Anthropic. Grows into the spec's full state machine in later tickets.
@@ -38,9 +39,13 @@ final class AppModel {
                 auth = .signedIn
             }
         } catch {
+            // Status text only — never the Credential.
+            Self.log.error("Could not read the stored Credential: \(error.localizedDescription, privacy: .public)")
             auth = .failed(error.localizedDescription)
         }
     }
+
+    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "tracklaude", category: "auth")
 
     func signIn() {
         guard signInTask == nil else { return }

@@ -17,6 +17,10 @@ struct KeychainCredentialStore: CredentialStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: Self.account,
+            // Why not kSecUseDataProtectionKeychain: writes there need keychain-access-groups,
+            // a restricted entitlement macOS refuses to launch an ad-hoc-signed app with
+            // (probed 2026-09-16). So the item lives in the login keychain, whose ACL is bound
+            // to the build's cdhash: the first launch of every rebuild prompts for the password.
         ]
     }
 

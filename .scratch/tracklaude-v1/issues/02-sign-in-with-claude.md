@@ -28,9 +28,12 @@ Findings worth knowing:
   (new cdhash) triggered two macOS password prompts before it could read the item — one to
   read, one to add the new build to the item's ACL. Same build afterwards: silent. Consequence
   for releases: every update will ask once. Not a sandbox failure, so no entitlement changed.
-  Candidate fix to probe later: `kSecUseDataProtectionKeychain` (no per-app ACL), which would
-  also change how the item is verified (`security find-generic-password` only searches
-  file-based keychains). Owner of that decision: ticket 09 / 10.
+  Probed the fix the same day: `kSecUseDataProtectionKeychain` reads fine but `SecItemAdd`
+  fails with "A required entitlement is not present", and adding `keychain-access-groups`
+  makes macOS refuse to launch the app at all (restricted entitlement, needs a provisioning
+  profile). Dead end under ad-hoc signing. The only way to stop the prompt is a stable
+  signing identity (a self-signed code-signing cert, as Usage4Claude does, or Developer ID) —
+  the owner's call, ticket 10.
 - **`allowLocalEndpointReuse` stays on.** Probed with BSD sockets (macOS 27): the port a
   server actively closed sits in TIME_WAIT for 2×MSL = 30 s, so without reuse a retry inside
   that window burns the 1458 fallback and a second retry fails. Cost: if the flag maps to
