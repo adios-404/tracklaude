@@ -38,43 +38,17 @@ public enum OAuthTokenExchange {
         redirectURI: String,
         transport: any UsageTransport
     ) async throws -> OAuthTokens {
-        let grant: [String: String] = [
-            "grant_type": "authorization_code",
-            "code": code,
-            "state": state,
-            "redirect_uri": redirectURI,
-            "client_id": OAuthConfig.clientID,
-            "code_verifier": codeVerifier,
-        ]
-        let request = HTTPRequest(
-            method: "POST",
-            url: OAuthConfig.tokenURL,
-            headers: ["Content-Type": "application/json"],
-            body: try JSONEncoder().encode(grant)
-        )
-        let response = try await transport.send(request)
-        guard (200..<300).contains(response.status) else {
-            throw OAuthTokenError.httpStatus(response.status)
-        }
-        return try decode(response.body)
-    }
-
-    private struct Wire: Decodable {
-        let accessToken: String
-        let refreshToken: String
-        let expiresIn: TimeInterval?
-    }
-
-    private static func decode(_ body: Data) throws -> OAuthTokens {
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        guard let wire = try? decoder.decode(Wire.self, from: body) else {
-            throw OAuthTokenError.undecodableResponse
-        }
-        return OAuthTokens(
-            accessToken: wire.accessToken,
-            refreshToken: wire.refreshToken,
-            expiresIn: wire.expiresIn
+        try await OAuthTokenEndpoint.post(
+            grant: [
+                "grant_type": "authorization_code",
+                "code": code,
+                "state": state,
+                "redirect_uri": redirectURI,
+                "client_id": OAuthConfig.clientID,
+                "code_verifier": codeVerifier,
+            ],
+            currentRefreshToken: nil,
+            transport: transport
         )
     }
 }

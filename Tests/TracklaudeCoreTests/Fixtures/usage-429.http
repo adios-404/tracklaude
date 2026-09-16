@@ -1,0 +1,5 @@
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+Retry-After: 17
+
+{"type":"error","error":{"type":"rate_limit_error","message":"Too many requests"}}

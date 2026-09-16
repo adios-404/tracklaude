@@ -1,1 +1,4 @@
+HTTP/1.1 403 Forbidden
+Content-Type: text/html; charset=UTF-8
+
 <!DOCTYPE html><html lang="en"><head><title>Just a moment...</title></head><body><h1>Checking your browser</h1></body></html>
