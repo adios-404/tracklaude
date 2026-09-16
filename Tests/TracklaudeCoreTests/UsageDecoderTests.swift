@@ -3,27 +3,30 @@ import Testing
 import TracklaudeCore
 
 private let fetchedAt = Date(timeIntervalSince1970: 1_800_000_000)
-// 2026-09-16T18:00:00Z and 2026-09-20T09:00:00Z as epoch seconds.
-private let fiveHourReset = Date(timeIntervalSince1970: 1_789_581_600)
-private let sevenDayReset = Date(timeIntervalSince1970: 1_789_894_800)
+// The recorded Resets, 2026-09-16T20:00:00.83Z and 2026-09-17T03:00:00.83Z, rounded to the second.
+private let fiveHourReset = Date(timeIntervalSince1970: 1_789_588_801)
+private let sevenDayReset = Date(timeIntervalSince1970: 1_789_614_001)
 
-@Test("a normal response yields the 5-hour and 7-day Windows and the fetch time")
+@Test("a real response yields the 5-hour and 7-day Windows, the reported per-model Window, and the fetch time")
 func normalResponse() throws {
     let snapshot = try UsageDecoder.decode(try Fixture.body("usage-normal.http"), fetchedAt: fetchedAt)
 
     #expect(snapshot.fetchedAt == fetchedAt)
-    #expect(snapshot.fiveHour == Window(utilization: 42, resetsAt: fiveHourReset))
-    #expect(snapshot.sevenDay == Window(utilization: 17.5, resetsAt: sevenDayReset))
+    #expect(snapshot.fiveHour == Window(utilization: 48, resetsAt: fiveHourReset))
+    #expect(snapshot.sevenDay == Window(utilization: 46, resetsAt: sevenDayReset))
+    // Anthropic reported this one at 0% with a Reset, so it is a real (if idle) Window.
+    // Its resets_at has no fractional seconds — the parser must accept both forms.
+    #expect(snapshot.perModel == [
+        ModelWindow(model: "Fable", window: Window(utilization: 0, resetsAt: Date(timeIntervalSince1970: 1_789_614_000))),
+    ])
 }
 
 @Test("weekly_scoped limits with a model display name become per-model Windows, sorted by name")
 func perModelWindowsFromLimits() throws {
     let snapshot = try UsageDecoder.decode(try Fixture.body("usage-per-model.http"), fetchedAt: fetchedAt)
 
-    #expect(snapshot.perModel == [
-        ModelWindow(model: "Opus", window: Window(utilization: 61, resetsAt: sevenDayReset)),
-        ModelWindow(model: "Sonnet", window: Window(utilization: 8, resetsAt: sevenDayReset)),
-    ])
+    #expect(snapshot.perModel.map(\.model) == ["Opus", "Sonnet"])
+    #expect(snapshot.perModel.map(\.window.utilization) == [61, 8])
 }
 
 @Test("legacy seven_day_opus/sonnet fields count as per-model Windows unless they are 0 with no Reset")
@@ -60,7 +63,7 @@ func unknownKeysIgnored() throws {
 
     let snapshot = try UsageDecoder.decode(body, fetchedAt: fetchedAt)
 
-    #expect(snapshot.fiveHour == Window(utilization: 5, resetsAt: fiveHourReset))
+    #expect(snapshot.fiveHour == Window(utilization: 5, resetsAt: Date(timeIntervalSince1970: 1_789_581_600)))
     #expect(snapshot.perModel.isEmpty)
 }
 

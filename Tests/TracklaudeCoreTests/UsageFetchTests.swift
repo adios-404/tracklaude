@@ -27,7 +27,7 @@ func fetchDecodesSnapshot() async throws {
     let snapshot = try await UsageFetch.perform(accessToken: "T", transport: transport, now: now)
 
     #expect(snapshot.fetchedAt == now)
-    #expect(snapshot.fiveHour?.utilization == 42)
+    #expect(snapshot.fiveHour?.utilization == 48)
 }
 
 @Test("a 401 is reported as unauthorized so the caller can refresh and retry")
@@ -43,7 +43,7 @@ func fetchReports401() async throws {
 func fetchReports429WithRetryAfter() async throws {
     let transport = FakeTransport(replying: try Fixture.response("usage-429.http"))
 
-    await #expect(throws: UsageFetchError.rateLimited(retryAfter: 17)) {
+    await #expect(throws: UsageFetchError.rateLimited(retryAfter: 300)) {
         try await UsageFetch.perform(accessToken: "T", transport: transport, now: now)
     }
 }
