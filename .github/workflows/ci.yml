@@ -2,22 +2,25 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
   build-and-test:
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # Swift Testing needs a Swift 6 toolchain (Xcode 16+); the runner's default may be older.
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
         with:
           xcode-version: latest-stable
 
       - name: Toolchain
         run: swift --version
+
+      # Architecture rule from the spec: the core library holds logic only.
+      - name: TracklaudeCore imports no UI framework
+        run: "! grep -rnE '^import (AppKit|SwiftUI|Cocoa)' Sources/TracklaudeCore"
 
       - name: Build
         run: make build

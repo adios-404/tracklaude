@@ -2,7 +2,10 @@
 
 APP_NAME    := tracklaude
 BUNDLE_ID   := com.adios404.tracklaude
-VERSION     := $(strip $(shell cat VERSION))
+VERSION     := $(strip $(shell cat VERSION 2>/dev/null))
+ifeq ($(VERSION),)
+  $(error VERSION file is missing or empty)
+endif
 BUILD_DIR   := .build/release
 DIST_DIR    := dist
 APP         := $(DIST_DIR)/$(APP_NAME).app
@@ -37,7 +40,8 @@ bundle: build
 	rm -rf "$(APP)"
 	mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Resources"
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(CONTENTS)/MacOS/$(APP_NAME)"
-	sed 's/@VERSION@/$(VERSION)/g' Packaging/Info.plist.in > "$(CONTENTS)/Info.plist"
+	sed -e 's/@VERSION@/$(VERSION)/g' -e 's/@BUNDLE_ID@/$(BUNDLE_ID)/g' -e 's/@APP_NAME@/$(APP_NAME)/g' \
+	    Packaging/Info.plist.in > "$(CONTENTS)/Info.plist"
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	@echo "Assembled $(APP) (v$(VERSION))"
 
@@ -46,6 +50,8 @@ sign: bundle
 	codesign --verify --verbose=2 "$(APP)"
 
 install: sign
+	# Why: replacing a running app's bundle underneath it is undefined; stop it first.
+	# The leading '-' tolerates "not running", which is the common case.
 	-pkill -x "$(APP_NAME)" 2>/dev/null
 	rm -rf "$(INSTALL_DIR)/$(APP_NAME).app"
 	cp -R "$(APP)" "$(INSTALL_DIR)/$(APP_NAME).app"
