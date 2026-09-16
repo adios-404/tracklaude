@@ -40,6 +40,8 @@ The owner works by `/clear` → `/implement` → repeat. When `/implement` (or
 5. **Commit at milestones, push at close.** Conventional-commit messages explaining *why*.
    Push `main` when the ticket is closed so CI runs, then report the CI result in the
    final message. If CI fails, fix it in the same session.
-6. **Update memory** only for durable findings (toolchain quirks, verified facts with dates).
+6. **CI is stricter than local.** The runner's Swift Testing (Swift 6.0.x) rejects `await`
+   inside `#expect(...)`; hoist awaited values into a `let` first. Local Swift 6.2 accepts both.
+7. **Update memory** only for durable findings (toolchain quirks, verified facts with dates).
 
 Read the previous ticket's `## Comments` before starting — that is where the handoff lives.
