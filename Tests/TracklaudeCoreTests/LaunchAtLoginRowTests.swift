@@ -20,11 +20,9 @@ func requiresApprovalIsOnWithNote() {
     ))
 }
 
-@Test("an app macOS cannot find reads as off and says why")
-func notFoundIsOffWithNote() {
-    #expect(LaunchAtLoginRow.render(status: .notFound) == LaunchAtLoginRow(
-        isOn: false, note: "macOS can't find this app to register it. Move it to /Applications.", offersSystemSettings: false
-    ))
+@Test("not found reads as plain off — macOS reports it for a main app never registered, and register() works from there (verified 2026-09-17)")
+func notFoundIsOff() {
+    #expect(LaunchAtLoginRow.render(status: .notFound) == LaunchAtLoginRow(isOn: false, note: nil, offersSystemSettings: false))
 }
 
 @Test("a failed register or unregister keeps the real status and shows the reason")

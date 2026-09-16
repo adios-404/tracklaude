@@ -5,7 +5,9 @@ public enum LaunchAtLoginStatus: Equatable, Sendable, CaseIterable {
     case enabled
     /// Registered, but the user (or an MDM profile) has to approve it in System Settings.
     case requiresApproval
-    /// macOS cannot locate the app to register it.
+    /// What macOS reports for a main app it has never registered (verified 2026-09-17 on
+    /// macOS 27: `notFound` from launch until the first `register()`, which succeeds).
+    /// Apple documents it as "cannot be found"; for the app itself it means "never asked".
     case notFound
 }
 
@@ -33,16 +35,13 @@ public struct LaunchAtLoginRow: Equatable, Sendable {
             return LaunchAtLoginRow(isOn: isOn, note: "Couldn't change Launch at Login: \(failure)", offersSystemSettings: false)
         }
         switch status {
-        case .enabled, .notRegistered:
+        // Why: `notFound` is not an error here — it is what a never-registered app reads
+        // as, and a register that actually fails throws and lands in `failure` instead.
+        case .enabled, .notRegistered, .notFound:
             return LaunchAtLoginRow(isOn: isOn, note: nil, offersSystemSettings: false)
         case .requiresApproval:
             return LaunchAtLoginRow(
                 isOn: true, note: "Waiting for approval in System Settings › Login Items.", offersSystemSettings: true
-            )
-        case .notFound:
-            return LaunchAtLoginRow(
-                isOn: false, note: "macOS can't find this app to register it. Move it to /Applications.",
-                offersSystemSettings: false
             )
         }
     }
