@@ -12,9 +12,14 @@ actor LoopbackCallbackServer: CallbackListener {
     private var expectedState = ""
     private var sockets: LoopbackSockets?
     private var pending: CheckedContinuation<String, any Error>?
+    /// Why: the browser can redirect before `awaitCode` has installed its continuation
+    /// (the flow opens the browser first). The verdict is parked here until it is asked for.
+    private var outcome: Result<String, any Error>?
+    private var lastBindError: (any Error)?
 
     func start(expectedState: String) async throws -> UInt16 {
         self.expectedState = expectedState
+        outcome = nil
         for port in OAuthConfig.callbackPorts {
             let candidate = LoopbackSockets(port: port) { [weak self] target in
                 await self?.reply(to: target) ?? .notFound
@@ -25,15 +30,20 @@ actor LoopbackCallbackServer: CallbackListener {
                 return port
             } catch {
                 candidate.stop()
+                lastBindError = error
             }
         }
-        throw SignInError.noCallbackPort
+        throw SignInError.noCallbackPort(underlying: lastBindError)
     }
 
     func awaitCode() async throws -> String {
-        try await withTaskCancellationHandler {
+        if let outcome { return try outcome.get() }
+        return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 pending = continuation
+                // Why: `onCancel` fires asynchronously, so a cancellation that landed before
+                // this continuation existed would otherwise be missed and the wait would hang.
+                if Task.isCancelled { cancel() }
             }
         } onCancel: {
             Task { await self.cancel() }
@@ -60,19 +70,25 @@ actor LoopbackCallbackServer: CallbackListener {
     private func finish(with result: Result<String, any Error>) {
         sockets?.stop()
         sockets = nil
-        pending?.resume(with: result)
-        pending = nil
+        if let pending {
+            pending.resume(with: result)
+            self.pending = nil
+        } else if outcome == nil {
+            outcome = result
+        }
     }
 }
 
 enum SignInError: Error, LocalizedError {
-    case noCallbackPort
+    case noCallbackPort(underlying: (any Error)?)
     case denied(String)
 
     var errorDescription: String? {
         switch self {
-        case .noCallbackPort:
-            return "Ports \(OAuthConfig.callbackPorts.map(String.init).joined(separator: " and ")) are both in use."
+        case .noCallbackPort(let underlying):
+            let ports = OAuthConfig.callbackPorts.map(String.init).joined(separator: " or ")
+            let detail = underlying.map { " (\($0.localizedDescription))" } ?? ""
+            return "Could not listen on localhost port \(ports) for the browser's reply\(detail)."
         case .denied(let reason):
             return "Anthropic did not approve the sign-in (\(reason))."
         }
@@ -131,6 +147,10 @@ private final class LoopbackSockets: @unchecked Sendable {
     private func makeListener(host: NWEndpoint.Host) throws -> NWListener {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: host, port: port)
+        // Why: this server closes the callback connection first, which parks the port in
+        // TIME_WAIT for 2×MSL (30 s here); without reuse a retry inside that window would
+        // burn the fallback port and a second retry would fail outright. Probed with BSD
+        // sockets on macOS 27, 2026-09-16.
         parameters.allowLocalEndpointReuse = true
         let listener = try NWListener(using: parameters)
         listener.newConnectionHandler = { [weak self] connection in
@@ -141,6 +161,7 @@ private final class LoopbackSockets: @unchecked Sendable {
 
     private func waitUntilReady(_ listener: NWListener) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            // Safe: every state update is delivered serially on `queue`.
             nonisolated(unsafe) var resumed = false
             listener.stateUpdateHandler = { state in
                 guard !resumed else { return }
@@ -164,6 +185,7 @@ private final class LoopbackSockets: @unchecked Sendable {
 
     private func serve(_ connection: NWConnection) {
         connection.start(queue: queue)
+        // One read is enough for a browser's GET: the request line is in the first segment.
         connection.receive(minimumIncompleteLength: 1, maximumLength: Self.maxRequestBytes) { [handler] data, _, _, _ in
             let target = data.flatMap(Self.requestTarget)
             Task {

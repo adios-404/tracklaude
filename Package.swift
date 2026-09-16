@@ -19,7 +19,8 @@ let package = Package(
         // Swift Testing. With Command Line Tools only, run via `make test` (see Makefile).
         .testTarget(
             name: "TracklaudeCoreTests",
-            dependencies: ["TracklaudeCore"]
+            dependencies: ["TracklaudeCore"],
+            resources: [.copy("Fixtures")]
         ),
     ]
 )

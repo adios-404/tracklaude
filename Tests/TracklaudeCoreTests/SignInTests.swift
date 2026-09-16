@@ -2,9 +2,7 @@ import Foundation
 import Testing
 import TracklaudeCore
 
-private let tokenResponse = HTTPResponse.json(status: 200, """
-    {"access_token":"sk-ant-oat01-ACCESS","refresh_token":"sk-ant-ort01-REFRESH","expires_in":3600}
-    """)
+private let tokenResponse = "oauth-token-response.json"
 
 /// Records the URL handed to the browser.
 private actor BrowserSpy {
@@ -30,7 +28,7 @@ private func makeSignIn(
 @Test("after sign-in the refresh token is the stored Credential")
 func signInStoresRefreshTokenAsCredential() async throws {
     let store = InMemoryCredentialStore()
-    let signIn = makeSignIn(transport: FakeTransport(replying: tokenResponse), store: store)
+    let signIn = makeSignIn(transport: FakeTransport(replying: try Fixture.jsonResponse(tokenResponse)), store: store)
 
     _ = try await signIn.run()
 
@@ -42,7 +40,7 @@ func signInOpensBrowserWiredToTheListener() async throws {
     let listener = FakeCallbackListener(port: 1458)
     let browser = BrowserSpy()
     let signIn = makeSignIn(
-        transport: FakeTransport(replying: tokenResponse), store: InMemoryCredentialStore(),
+        transport: FakeTransport(replying: try Fixture.jsonResponse(tokenResponse)), store: InMemoryCredentialStore(),
         listener: listener, browser: browser
     )
 

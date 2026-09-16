@@ -7,14 +7,13 @@ import TracklaudeCore
 struct KeychainCredentialStore: CredentialStore {
     static let account = "credential"
 
-    let service: String
+    /// The bundle id from Info.plist (stamped by the Makefile, the single source of ids).
+    /// Nil only when the binary runs outside a bundle, e.g. `swift run`; every operation then fails.
+    private let service = Bundle.main.bundleIdentifier
 
-    init(service: String = Bundle.main.bundleIdentifier ?? "com.adios404.tracklaude") {
-        self.service = service
-    }
-
-    private var baseQuery: [String: Any] {
-        [
+    private func baseQuery() throws -> [String: Any] {
+        guard let service else { throw KeychainError.noBundleIdentifier }
+        return [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: Self.account,
@@ -22,7 +21,7 @@ struct KeychainCredentialStore: CredentialStore {
     }
 
     func load() async throws -> Credential? {
-        var query = baseQuery
+        var query = try baseQuery()
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -43,7 +42,8 @@ struct KeychainCredentialStore: CredentialStore {
 
     func save(_ credential: Credential) async throws {
         let data = Data(credential.refreshToken.utf8)
-        var add = baseQuery
+        let query = try baseQuery()
+        var add = query
         add[kSecValueData as String] = data
         let status = SecItemAdd(add as CFDictionary, nil)
         switch status {
@@ -51,7 +51,7 @@ struct KeychainCredentialStore: CredentialStore {
             return
         case errSecDuplicateItem:
             let update = [kSecValueData as String: data]
-            let updateStatus = SecItemUpdate(baseQuery as CFDictionary, update as CFDictionary)
+            let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
             guard updateStatus == errSecSuccess else { throw KeychainError.unexpectedStatus(updateStatus) }
         default:
             throw KeychainError.unexpectedStatus(status)
@@ -59,7 +59,7 @@ struct KeychainCredentialStore: CredentialStore {
     }
 
     func delete() async throws {
-        let status = SecItemDelete(baseQuery as CFDictionary)
+        let status = SecItemDelete(try baseQuery() as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeychainError.unexpectedStatus(status)
         }
@@ -67,11 +67,14 @@ struct KeychainCredentialStore: CredentialStore {
 }
 
 enum KeychainError: Error, LocalizedError {
+    case noBundleIdentifier
     case corruptItem
     case unexpectedStatus(OSStatus)
 
     var errorDescription: String? {
         switch self {
+        case .noBundleIdentifier:
+            return "Not running from an app bundle, so there is no Keychain service name."
         case .corruptItem:
             return "The stored Credential could not be read."
         case .unexpectedStatus(let status):

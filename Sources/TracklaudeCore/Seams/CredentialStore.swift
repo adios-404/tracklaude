@@ -1,6 +1,6 @@
 /// The OAuth refresh token the app holds (see CONTEXT.md). Never a session cookie.
 public struct Credential: Equatable, Sendable {
-    public var refreshToken: String
+    public let refreshToken: String
 
     public init(refreshToken: String) {
         self.refreshToken = refreshToken

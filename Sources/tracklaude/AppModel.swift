@@ -59,10 +59,12 @@ final class AppModel {
                 let tokens = try await flow.run()
                 accessToken = tokens.accessToken
                 auth = .signedIn
-            } catch is CancellationError {
-                auth = .signedOut
             } catch {
-                auth = .failed(error.localizedDescription)
+                // Why: a cancelled URLSession request surfaces as URLError.cancelled, not
+                // CancellationError, so the task flag is the reliable signal for "user cancelled".
+                auth = Task.isCancelled || error is CancellationError
+                    ? .signedOut
+                    : .failed(error.localizedDescription)
             }
         }
     }

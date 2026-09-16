@@ -3,10 +3,10 @@ import Foundation
 /// What the token endpoint hands back. The refresh token becomes the Credential; the access
 /// token lives in memory only.
 public struct OAuthTokens: Equatable, Sendable {
-    public var accessToken: String
-    public var refreshToken: String
+    public let accessToken: String
+    public let refreshToken: String
     /// Seconds until the access token expires, when the server says.
-    public var expiresIn: TimeInterval?
+    public let expiresIn: TimeInterval?
 
     public init(accessToken: String, refreshToken: String, expiresIn: TimeInterval?) {
         self.accessToken = accessToken
@@ -15,9 +15,18 @@ public struct OAuthTokens: Equatable, Sendable {
     }
 }
 
-public enum OAuthTokenError: Error, Equatable, Sendable {
+public enum OAuthTokenError: Error, Equatable, Sendable, LocalizedError {
     case httpStatus(Int)
     case undecodableResponse
+
+    public var errorDescription: String? {
+        switch self {
+        case .httpStatus(let status):
+            return "Anthropic refused the sign-in code (HTTP \(status))."
+        case .undecodableResponse:
+            return "Anthropic's reply to the sign-in code was not in the expected format."
+        }
+    }
 }
 
 /// Trades the authorization code from the callback for tokens (RFC 6749 §4.1.3 + PKCE).
@@ -51,19 +60,21 @@ public enum OAuthTokenExchange {
     }
 
     private struct Wire: Decodable {
-        let access_token: String
-        let refresh_token: String
-        let expires_in: TimeInterval?
+        let accessToken: String
+        let refreshToken: String
+        let expiresIn: TimeInterval?
     }
 
     private static func decode(_ body: Data) throws -> OAuthTokens {
-        guard let wire = try? JSONDecoder().decode(Wire.self, from: body) else {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let wire = try? decoder.decode(Wire.self, from: body) else {
             throw OAuthTokenError.undecodableResponse
         }
         return OAuthTokens(
-            accessToken: wire.access_token,
-            refreshToken: wire.refresh_token,
-            expiresIn: wire.expires_in
+            accessToken: wire.accessToken,
+            refreshToken: wire.refreshToken,
+            expiresIn: wire.expiresIn
         )
     }
 }

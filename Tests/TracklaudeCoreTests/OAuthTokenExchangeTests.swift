@@ -3,13 +3,11 @@ import Testing
 import TracklaudeCore
 
 // Body shape as documented in research/usage4claude-study.md §5 (verified 2026-09-16).
-private let tokenResponse = HTTPResponse.json(status: 200, """
-    {"token_type":"Bearer","access_token":"sk-ant-oat01-ACCESS","refresh_token":"sk-ant-ort01-REFRESH","expires_in":3600,"scope":"user:profile"}
-    """)
+private let tokenResponse = "oauth-token-response.json"
 
 @Test("code exchange POSTs the authorization_code grant as JSON to the token endpoint")
 func exchangeSendsAuthorizationCodeGrant() async throws {
-    let transport = FakeTransport(replying: tokenResponse)
+    let transport = FakeTransport(replying: try Fixture.jsonResponse(tokenResponse))
 
     _ = try await OAuthTokenExchange.exchange(
         code: "CODE", state: "STATE", codeVerifier: "VERIFIER",
@@ -33,7 +31,7 @@ func exchangeSendsAuthorizationCodeGrant() async throws {
 
 @Test("a successful exchange yields the access and refresh tokens")
 func exchangeReturnsBothTokens() async throws {
-    let transport = FakeTransport(replying: tokenResponse)
+    let transport = FakeTransport(replying: try Fixture.jsonResponse(tokenResponse))
 
     let tokens = try await OAuthTokenExchange.exchange(
         code: "CODE", state: "STATE", codeVerifier: "VERIFIER",

@@ -8,10 +8,10 @@ public protocol UsageTransport: Sendable {
 }
 
 public struct HTTPRequest: Equatable, Sendable {
-    public var method: String
-    public var url: URL
-    public var headers: [String: String]
-    public var body: Data?
+    public let method: String
+    public let url: URL
+    public let headers: [String: String]
+    public let body: Data?
 
     public init(method: String, url: URL, headers: [String: String] = [:], body: Data? = nil) {
         self.method = method
@@ -22,9 +22,9 @@ public struct HTTPRequest: Equatable, Sendable {
 }
 
 public struct HTTPResponse: Equatable, Sendable {
-    public var status: Int
-    public var headers: [String: String]
-    public var body: Data
+    public let status: Int
+    public let headers: [String: String]
+    public let body: Data
 
     public init(status: Int, headers: [String: String] = [:], body: Data = Data()) {
         self.status = status
