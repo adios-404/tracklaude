@@ -18,12 +18,18 @@ ENTITLEMENTS := Packaging/$(APP_NAME).entitlements
 # builds a runner whose `canImport(Testing)` is false and silently runs zero tests.
 # Passing the search path globally fixes it. On an Xcode toolchain the platform path
 # resolves and no extra flags are needed. Verified 2026-09-16, Swift 6.2.3 CLT.
+#
+# Why (second flag): a test file that imports both Testing and Foundation triggers the
+# `_Testing_Foundation` cross-import overlay, which the CLT ships as a framework binary with
+# no Swift module, so the import fails. The overlay only adds Foundation-typed conveniences
+# the suite does not use; disabling overlays under CLT is safe. Verified 2026-09-16.
 CLT_FRAMEWORKS := /Library/Developer/CommandLineTools/Library/Developer/Frameworks
 HAS_PLATFORM_PATH := $(shell xcrun --show-sdk-platform-path >/dev/null 2>&1 && echo yes)
 ifeq ($(HAS_PLATFORM_PATH),yes)
   TEST_FLAGS :=
 else
-  TEST_FLAGS := -Xswiftc -F$(CLT_FRAMEWORKS) -Xlinker -rpath -Xlinker $(CLT_FRAMEWORKS)
+  TEST_FLAGS := -Xswiftc -F$(CLT_FRAMEWORKS) -Xlinker -rpath -Xlinker $(CLT_FRAMEWORKS) \
+                -Xswiftc -Xfrontend -Xswiftc -disable-cross-import-overlays
 endif
 
 .PHONY: all build test bundle sign install run clean
