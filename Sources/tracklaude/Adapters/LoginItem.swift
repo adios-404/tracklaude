@@ -1,5 +1,4 @@
 import Foundation
-import os
 import ServiceManagement
 import TracklaudeCore
 
@@ -9,8 +8,6 @@ import TracklaudeCore
 /// the status means to the user.
 @MainActor
 struct LoginItem {
-    private static let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "tracklaude", category: "login-item")
-
     /// What macOS reports right now. Asked on every popover open, so a change made in
     /// System Settings › Login Items shows without a relaunch.
     var status: LaunchAtLoginStatus {
@@ -26,13 +23,14 @@ struct LoginItem {
         }
     }
 
+    /// Registers or unregisters the app. Throws when macOS refuses; the caller re-reads
+    /// `status` afterwards, since a successful register may still read as `requiresApproval`.
     func setEnabled(_ enabled: Bool) throws {
         if enabled {
             try SMAppService.mainApp.register()
         } else {
             try SMAppService.mainApp.unregister()
         }
-        Self.log.notice("Launch at Login \(enabled ? "registered" : "unregistered", privacy: .public); status \(String(describing: status), privacy: .public)")
     }
 
     /// System Settings › General › Login Items, where a `requiresApproval` item is approved.

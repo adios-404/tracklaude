@@ -11,3 +11,14 @@
 - [ ] Hostname allowlist check runs in CI on the release-configuration binary and is green
 - [ ] Entitlements check runs in CI and is green
 - [ ] Both checks demonstrably fail when a stray hostname or entitlement is introduced (verified once, then reverted)
+
+## Comments
+
+**2026-09-17 — handoff from ticket 08.** Everything the app persists is now: the Keychain item
+(`com.adios404.tracklaude` / `credential`), UserDefaults `alertsEnabled`, `launchAtLogin`
+(write-only mirror), `showsRemaining`, and — outside the app — the system login-items entry
+that `SMAppService` keeps. Sign out removes the Keychain item only (verified with `security`);
+the login item and defaults survive it by design. Hostnames in the binary: the popover now also
+opens `x-apple.systempreferences:` and calls `SMAppService.openSystemSettingsLoginItems()`, no
+new network hosts; the `strings` property test should still pass. See 08's Comments for the 429
+budget note before promising a polling rate.

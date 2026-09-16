@@ -40,8 +40,8 @@ final class AppModel {
     /// anything but granted.
     private(set) var alertPermission: AlertPermission = .undetermined
     /// What macOS reports for the login item (spec › user story 32). The system is the
-    /// truth: re-read on every popover open, and mirrored into UserDefaults `launchAtLogin`
-    /// as the record of what the user last asked for.
+    /// truth: re-read on every popover open. UserDefaults `launchAtLogin` mirrors whether
+    /// it reads as on — the second of the spec's two toggle booleans, never read back.
     private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
     /// Why the last register / unregister threw; cleared on the next attempt or re-read.
     private(set) var launchAtLoginFailure: String?
@@ -57,6 +57,9 @@ final class AppModel {
     /// 401 → refresh → retry dance. `nil` exactly while not signed in.
     private var session: UsageSession?
     private var signInTask: Task<Void, Never>?
+    /// The Keychain delete of the last Sign out; the next sign-in waits for it so the
+    /// delete can never land on the Credential the sign-in just saved.
+    private var signOutTask: Task<Void, Never>?
     private var isAsleep = false
     /// Sleeps until the next cadence slot, then issues a fetch. Cancelled on every re-plan.
     private var timerTask: Task<Void, Never>?
@@ -245,6 +248,8 @@ final class AppModel {
             // System Settings while the popover was closed, or a prompt still open when
             // this fetch landed, would otherwise cost the user this cycle's Alerts.
             await permissionRequest?.value
+            // A Sign out while this was queued cancels it: those Alerts were another session's.
+            guard !Task.isCancelled else { return }
             record(permission: await notifier.permission())
             guard alertsEnabled, alertPermission == .granted else {
                 Self.alertLog.notice("Not delivered: permission \(String(describing: self.alertPermission), privacy: .public)")
@@ -277,9 +282,10 @@ final class AppModel {
             Self.loginItemLog.notice("Launch at Login: \(String(describing: status), privacy: .public)")
         }
         launchAtLoginStatus = status
-        defaults.set(LaunchAtLoginRow.render(status: status).isOn, forKey: Self.launchAtLoginKey)
+        defaults.set(status.isOn, forKey: Self.launchAtLoginKey)
     }
 
+    /// The note's button when the login item awaits approval: System Settings › Login Items.
     func openLoginItemsSettings() {
         loginItem.openSystemSettings()
     }
@@ -390,6 +396,7 @@ final class AppModel {
         signInTask = Task {
             defer { signInTask = nil }
             do {
+                await signOutTask?.value
                 let tokens = try await flow.run()
                 session = UsageSession(
                     credential: Credential(refreshToken: tokens.refreshToken),
@@ -431,10 +438,11 @@ final class AppModel {
         // Why: the next sign-in may be another account; its Windows get the quiet first
         // sighting rather than a Reset Alert against this account's cycle.
         alertState = AlertState()
+        delivery?.cancel()
         signInFailure = nil
         signOutFailure = nil
         transition(to: .signedOut)
-        Task {
+        signOutTask = Task {
             // Why: a fetch cancelled mid-refresh could still write a rotated Credential
             // back; let it unwind before deleting, or the item would reappear.
             await inFlight?.value
