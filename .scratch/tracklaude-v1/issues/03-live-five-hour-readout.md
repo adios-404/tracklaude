@@ -13,3 +13,19 @@
 - [ ] Real fixtures recorded (credential scrubbed) and committed: normal, with per-model Windows, all-null, 401, 429 with Retry-After, 5xx, HTML body
 - [ ] Endpoint freshness measured: send a few messages in Claude while polling every 10 s; note in Comments how long until utilization changes. If coarser than 30 s, say so — the interval, not the design, gets revisited
 - [ ] Installed app shows a real value in the menu bar within a few seconds of launch
+
+## Comments
+
+**2026-09-16 — handoff from ticket 02.** Already in place: `UsageTransport` protocol
+(`Sources/TracklaudeCore/Seams/UsageTransport.swift`), the URLSession production adapter
+(`Sources/tracklaude/Adapters/URLSessionTransport.swift`, HTTP/3 off, 30 s timeout) and a
+fixture-replaying `FakeTransport` + `Fixture` helper under `Tests/TracklaudeCoreTests/Fakes/`
+with fixtures as files in `Tests/TracklaudeCoreTests/Fixtures/`. So the first box is done
+except for confirming it against the real endpoint.
+
+Not yet built and needed here: the **refresh grant**. After a relaunch the app holds only the
+Credential (refresh token); there is no access token in memory, so the first fetch must
+`POST console.anthropic.com/v1/oauth/token` with `{"grant_type":"refresh_token","refresh_token":…,"client_id":…}`
+(same endpoint and client id as `OAuthTokenExchange`), keep the access token in `AppModel`
+only, and write the rotated refresh token straight back to `CredentialStore`. Expect ~1 s of
+Keychain password prompts on the first launch of each rebuilt binary (ticket 02 finding).
