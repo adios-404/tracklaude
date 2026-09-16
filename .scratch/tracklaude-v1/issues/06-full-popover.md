@@ -22,3 +22,11 @@ per-Window text builder you can reuse for row percentages.
 **2026-09-16 — from ticket 04.** The popover body is wrapped in `TimelineView(.periodic(by: 1))`;
 pass `context.date` as `now` into your view-model so rows and footer tick together. The footer
 row (`UpdatedAgoText` + Refresh + Quit) already exists in `PopoverView.footer(now:)`.
+
+**2026-09-17 — handoff from ticket 05.** `PopoverView` is now: banner (`PopoverBanner.render(
+state:signInFailure:now:)` → `model.perform(action)`) → rows → footer, all driven by `model.state`
+(`AppState`); `model.snapshot` is `state.lastSnapshot`. Build your rows from that and dim them
+while `state.staleReason != nil` (the placeholder already does, with `.secondary`). The menu-bar
+label comes from `MenuBarText.render(state:remaining:now:)` → `MenuBarLabel { text, isDimmed }`;
+"remaining" is the only parameter still hardcoded (`false`) in `TracklaudeApp` and `PopoverView`.
+The footer hides Refresh via `model.canRefresh` and disables it via `model.isRefreshAllowed(now:)`.
