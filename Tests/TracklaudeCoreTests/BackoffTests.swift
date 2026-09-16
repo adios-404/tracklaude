@@ -23,7 +23,12 @@ func retryAfterTakesPrecedence() {
     #expect(Backoff.delay(consecutiveRateLimits: 1, retryAfter: 900) == 900)
 }
 
-@Test("a nonsensical Retry-After never schedules a fetch in the past")
-func retryAfterIsClampedAtZero() {
-    #expect(Backoff.delay(consecutiveRateLimits: 1, retryAfter: -10) == 0)
+@Test("a Retry-After of zero or less falls back to the schedule, never a tight loop")
+func nonPositiveRetryAfterUsesSchedule() {
+    // Observed 2026-09-17: a 429 with `Retry-After: 0` after an ordinary 30 s poll. Taken
+    // literally it re-fetched instantly, got another `0`, and sent 22,000 requests in
+    // eight minutes. The server has not said when to come back, so it is our schedule.
+    #expect(Backoff.delay(consecutiveRateLimits: 1, retryAfter: 0) == 60)
+    #expect(Backoff.delay(consecutiveRateLimits: 2, retryAfter: 0) == 120)
+    #expect(Backoff.delay(consecutiveRateLimits: 1, retryAfter: -10) == 60)
 }

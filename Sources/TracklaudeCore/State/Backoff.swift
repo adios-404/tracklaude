@@ -12,7 +12,11 @@ public enum Backoff {
 
     /// - Parameter consecutiveRateLimits: how many 429s in a row this one makes (1-based).
     public static func delay(consecutiveRateLimits: Int, retryAfter: TimeInterval?) -> TimeInterval {
-        if let retryAfter { return max(0, retryAfter) }
+        // Why: `Retry-After: 0` was observed 2026-09-17 on an ordinary 30 s poll. Honoured
+        // literally it means "retry now", which re-fetches instantly, gets another `0`, and
+        // floods the endpoint (22,000 requests in eight minutes). A non-positive header says
+        // nothing about when to come back, so the schedule applies as if it were absent.
+        if let retryAfter, retryAfter > 0 { return retryAfter }
         let doublings = max(0, consecutiveRateLimits - 1)
         return min(firstDelay * pow(2, Double(doublings)), cap)
     }
