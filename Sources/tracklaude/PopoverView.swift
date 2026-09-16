@@ -2,7 +2,7 @@ import SwiftUI
 import TracklaudeCore
 
 /// The popover shown on click: the banner (when something is wrong), a row per Window,
-/// the used ↔ remaining toggle, the Alerts toggle, and the footer.
+/// the used ↔ remaining toggle, the two settings toggles, and the footer.
 struct PopoverView: View {
     @Bindable var model: AppModel
 
@@ -15,13 +15,17 @@ struct PopoverView: View {
         // to run a one-second timer.
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(alignment: .leading, spacing: 10) {
-                if let banner = PopoverBanner.render(state: model.state, signInFailure: model.signInFailure, now: context.date) {
+                if let banner = PopoverBanner.render(
+                    state: model.state, signInFailure: model.signInFailure,
+                    signOutFailure: model.signOutFailure, now: context.date
+                ) {
                     bannerView(banner)
                 }
                 usageSection(now: context.date)
                 if model.snapshot != nil {
                     modeToggle
                 }
+                launchAtLoginToggle
                 alertsToggle
                 Divider()
                 footer(now: context.date)
@@ -33,6 +37,7 @@ struct PopoverView: View {
         .onAppear {
             model.poll(.popoverOpened)
             model.refreshAlertPermission()
+            model.refreshLaunchAtLogin()
         }
     }
 
@@ -53,22 +58,56 @@ struct PopoverView: View {
         }
     }
 
+    /// One line (ticket 08): the Snapshot's age, then Refresh · Sign out · Quit. The two
+    /// toggles sit above the divider, each with room for its own note line.
     private func footer(now: Date) -> some View {
-        HStack {
+        HStack(spacing: 6) {
             Text(UpdatedAgoText.render(fetchedAt: model.snapshot?.fetchedAt, now: now))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-            Spacer()
+                .lineLimit(1)
+            Spacer(minLength: 0)
             if model.canRefresh {
                 Button("Refresh") { model.refresh() }
                     .disabled(!model.isRefreshAllowed(now: now))
                     .keyboardShortcut("r")
             }
+            if model.state.isSignedIn {
+                Button("Sign out") { model.signOut() }
+            }
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
+        }
+        .controlSize(.small)
+    }
+
+    /// Launch at Login (spec › user story 32). Off by default; the checkbox shows what macOS
+    /// reports, so "waiting for approval" still reads as on with a line saying where to approve.
+    @ViewBuilder
+    private var launchAtLoginToggle: some View {
+        let row = LaunchAtLoginRow.render(status: model.launchAtLoginStatus, failure: model.launchAtLoginFailure)
+        Toggle("Launch at Login", isOn: Binding(get: { row.isOn }, set: { model.setLaunchAtLogin($0) }))
+            .toggleStyle(.checkbox)
+        if let note = row.note {
+            noteLine(note, systemSettings: row.offersSystemSettings ? { model.openLoginItemsSettings() } : nil)
+        }
+    }
+
+    /// A caption under a toggle, with the System Settings button when that is where the fix is.
+    private func noteLine(_ text: String, systemSettings: (() -> Void)?) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Label(text, systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            if let systemSettings {
+                Button("Open System Settings", action: systemSettings)
+                    .controlSize(.small)
+            }
         }
     }
 
@@ -96,14 +135,7 @@ struct PopoverView: View {
         Toggle("Alerts at 80, 90 and 100%", isOn: $model.alertsEnabled)
             .toggleStyle(.checkbox)
         if model.alertsEnabled, let problem = Self.permissionProblem(model.alertPermission) {
-            HStack(alignment: .firstTextBaseline) {
-                Label(problem, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Open System Settings") { NSWorkspace.shared.open(AlertNotifier.systemSettingsURL) }
-                    .controlSize(.small)
-            }
+            noteLine(problem) { NSWorkspace.shared.open(AlertNotifier.systemSettingsURL) }
         }
     }
 

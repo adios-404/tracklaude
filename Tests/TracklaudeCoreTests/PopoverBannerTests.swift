@@ -23,6 +23,15 @@ func signedOutAfterFailure() {
     #expect(banner == PopoverBanner(message: "Sign-in failed: Anthropic refused the sign-in code (HTTP 400).", action: .signIn))
 }
 
+@Test("a Sign out whose Keychain delete failed says so — the user is signed out, but the item is still there")
+func signedOutAfterFailedDelete() {
+    let banner = PopoverBanner.render(state: .signedOut, signOutFailure: "Keychain: The user name or passphrase you entered is not correct.", now: now)
+    #expect(banner == PopoverBanner(
+        message: "Signed out, but the saved sign-in could not be removed from the Keychain: Keychain: The user name or passphrase you entered is not correct.",
+        action: .signIn
+    ))
+}
+
 @Test("signing in points at the browser and offers Cancel")
 func signingIn() {
     #expect(PopoverBanner.render(state: .signingIn, now: now) == PopoverBanner(message: "Finish signing in in your browser…", action: .cancelSignIn))

@@ -11,6 +11,9 @@ final class AppModel {
     private(set) var state: AppState = .signedOut
     /// Why the last sign-in attempt failed; shown on the signed-out banner, cleared on the next attempt.
     private(set) var signInFailure: String?
+    /// Why the last Sign out could not remove the Credential from the Keychain; shown on the
+    /// signed-out banner, cleared on the next sign-in or Sign out.
+    private(set) var signOutFailure: String?
     /// When the last fetch was issued (not when it landed): the cadence and the Refresh
     /// cooldown both count from here, so an in-flight fetch is never doubled.
     private(set) var lastFetch: Date?
@@ -36,6 +39,12 @@ final class AppModel {
     /// What macOS answered; the popover says so and links to System Settings when it is
     /// anything but granted.
     private(set) var alertPermission: AlertPermission = .undetermined
+    /// What macOS reports for the login item (spec › user story 32). The system is the
+    /// truth: re-read on every popover open, and mirrored into UserDefaults `launchAtLogin`
+    /// as the record of what the user last asked for.
+    private(set) var launchAtLoginStatus: LaunchAtLoginStatus = .notRegistered
+    /// Why the last register / unregister threw; cleared on the next attempt or re-read.
+    private(set) var launchAtLoginFailure: String?
     /// What has fired this cycle, per Window. Tracked even while Alerts are off, so
     /// switching them on mid-cycle cannot replay crossings the user already lived through.
     private var alertState = AlertState()
@@ -62,25 +71,30 @@ final class AppModel {
     private let store: any CredentialStore
     private let transport: any UsageTransport
     private let notifier: AlertNotifier
+    private let loginItem: LoginItem
     private let defaults: UserDefaults
     private static let showsRemainingKey = "showsRemaining"
     private static let alertsEnabledKey = "alertsEnabled"
+    private static let launchAtLoginKey = "launchAtLogin"
 
     init(
         store: any CredentialStore = KeychainCredentialStore(),
         transport: any UsageTransport = URLSessionTransport(),
         notifier: AlertNotifier = AlertNotifier(),
+        loginItem: LoginItem = LoginItem(),
         defaults: UserDefaults = .standard
     ) {
         self.store = store
         self.transport = transport
         self.notifier = notifier
+        self.loginItem = loginItem
         self.defaults = defaults
         self.showsRemaining = defaults.bool(forKey: Self.showsRemainingKey)
         self.alertsEnabled = defaults.bool(forKey: Self.alertsEnabledKey)
         observeSleepAndWake()
         Task { await restoreCredential() }
         requestAlertPermissionIfEnabled()
+        refreshLaunchAtLogin()
     }
 
     var snapshot: Snapshot? { state.lastSnapshot }
@@ -240,6 +254,36 @@ final class AppModel {
         }
     }
 
+    // MARK: - Launch at Login
+
+    /// The toggle. Registers or unregisters with macOS, then shows whatever macOS says —
+    /// which may be "requires approval" rather than on.
+    func setLaunchAtLogin(_ enabled: Bool) {
+        launchAtLoginFailure = nil
+        do {
+            try loginItem.setEnabled(enabled)
+        } catch {
+            Self.loginItemLog.error("Launch at Login change failed: \(error.localizedDescription, privacy: .public)")
+            launchAtLoginFailure = error.localizedDescription
+        }
+        refreshLaunchAtLogin()
+    }
+
+    /// Re-reads the login item's status. The popover calls this on open, so a change made in
+    /// System Settings › Login Items is reflected without a relaunch.
+    func refreshLaunchAtLogin() {
+        let status = loginItem.status
+        if status != launchAtLoginStatus {
+            Self.loginItemLog.notice("Launch at Login: \(String(describing: status), privacy: .public)")
+        }
+        launchAtLoginStatus = status
+        defaults.set(LaunchAtLoginRow.render(status: status).isOn, forKey: Self.launchAtLoginKey)
+    }
+
+    func openLoginItemsSettings() {
+        loginItem.openSystemSettings()
+    }
+
     /// Logs a line only when the case or reason changes, not on every 30 s Snapshot.
     private func transition(to next: AppState) {
         let before = Self.describe(state)
@@ -316,6 +360,7 @@ final class AppModel {
     private static let log = Logger(subsystem: subsystem, category: "auth")
     private static let pollLog = Logger(subsystem: subsystem, category: "poll")
     private static let alertLog = Logger(subsystem: subsystem, category: "alerts")
+    private static let loginItemLog = Logger(subsystem: subsystem, category: "login-item")
 
     /// The banner's one button.
     func perform(_ action: PopoverBanner.Action) {
@@ -332,6 +377,7 @@ final class AppModel {
         // expired session, readout and all — not a blank signed-out.
         let resumeState = state
         signInFailure = nil
+        signOutFailure = nil
         transition(to: .signingIn)
         let flow = SignIn(
             listener: LoopbackCallbackServer(),
@@ -370,5 +416,35 @@ final class AppModel {
 
     func cancelSignIn() {
         signInTask?.cancel()
+    }
+
+    /// Sign out (spec › user story 25): the app is signed out at once — no session, no
+    /// polling, no Alert history — and the Credential leaves the Keychain right after.
+    func signOut() {
+        guard state.isSignedIn else { return }
+        cancelTimer()
+        let inFlight = fetchTask
+        inFlight?.cancel()
+        fetchTask = nil
+        fetchGeneration += 1
+        session = nil
+        // Why: the next sign-in may be another account; its Windows get the quiet first
+        // sighting rather than a Reset Alert against this account's cycle.
+        alertState = AlertState()
+        signInFailure = nil
+        signOutFailure = nil
+        transition(to: .signedOut)
+        Task {
+            // Why: a fetch cancelled mid-refresh could still write a rotated Credential
+            // back; let it unwind before deleting, or the item would reappear.
+            await inFlight?.value
+            do {
+                try await store.delete()
+                Self.log.notice("Signed out: Credential removed")
+            } catch {
+                Self.log.error("Sign out could not remove the Credential: \(error.localizedDescription, privacy: .public)")
+                signOutFailure = error.localizedDescription
+            }
+        }
     }
 }

@@ -29,14 +29,25 @@ public struct PopoverBanner: Equatable, Sendable {
         self.action = action
     }
 
-    /// - Parameter signInFailure: why the last sign-in attempt failed, shown only while
-    ///   signed out so the user knows the button is worth pressing again.
-    public static func render(state: AppState, signInFailure: String? = nil, now: Date) -> PopoverBanner? {
+    /// - Parameters:
+    ///   - signInFailure: why the last sign-in attempt failed, shown only while signed out
+    ///     so the user knows the button is worth pressing again.
+    ///   - signOutFailure: why the last Sign out could not remove the Credential from the
+    ///     Keychain. The app is signed out regardless; the user should know the item remains.
+    public static func render(
+        state: AppState, signInFailure: String? = nil, signOutFailure: String? = nil, now: Date
+    ) -> PopoverBanner? {
         switch state {
         case .polling:
             return nil
         case .signedOut:
-            let message = signInFailure.map { "Sign-in failed: \($0)" } ?? "Not signed in."
+            let message = if let signInFailure {
+                "Sign-in failed: \(signInFailure)"
+            } else if let signOutFailure {
+                "Signed out, but the saved sign-in could not be removed from the Keychain: \(signOutFailure)"
+            } else {
+                "Not signed in."
+            }
             return PopoverBanner(message: message, action: .signIn)
         case .signingIn:
             return PopoverBanner(message: "Finish signing in in your browser…", action: .cancelSignIn)
