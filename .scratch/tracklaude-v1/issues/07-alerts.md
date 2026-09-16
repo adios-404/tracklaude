@@ -18,3 +18,11 @@
 response (`.83`, `.08`, `.51` seen for one Reset). The decoder truncates to the second, but treat
 a cycle as new only when the Reset moves by more than a tolerance (a minute), never on exact
 inequality.
+
+**2026-09-17 — handoff from ticket 06.** The popover bands its bar colour on the *rounded*
+Utilization (`Window.percent(remaining: false)`: 89.5 → red). If Alerts cross on raw Utilization,
+a row is red one tick before the 90 Alert fires; consider using the same rounded value so the
+colour and the notification agree. `PopoverRows.render` is the row builder if the Alerts toggle
+needs a row state. Ticket 05's note still stands: decide Alerts in `AppModel.fetchUsage` before
+`transition(to:)`, comparing `state.lastSnapshot` with the fresh one.
+
