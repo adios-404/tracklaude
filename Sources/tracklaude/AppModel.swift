@@ -25,6 +25,19 @@ final class AppModel {
     var showsRemaining: Bool {
         didSet { defaults.set(showsRemaining, forKey: Self.showsRemainingKey) }
     }
+    /// Alerts on ↔ off (spec › Alerts). Off means no permission request and no delivery;
+    /// on asks macOS for permission, which it only prompts for once.
+    var alertsEnabled: Bool {
+        didSet {
+            defaults.set(alertsEnabled, forKey: Self.alertsEnabledKey)
+            if alertsEnabled { Task { await requestAlertPermission() } }
+        }
+    }
+    /// What macOS answered; the popover says so and links to System Settings when denied.
+    private(set) var alertPermission: AlertPermission = .undetermined
+    /// What has fired this cycle, per Window. Tracked even while Alerts are off, so
+    /// switching them on mid-cycle cannot replay crossings the user already lived through.
+    private var alertState = AlertState()
 
     /// Holds the Credential and access token (memory only, ADR-0001) and does the
     /// 401 → refresh → retry dance. `nil` exactly while not signed in.
@@ -43,20 +56,26 @@ final class AppModel {
 
     private let store: any CredentialStore
     private let transport: any UsageTransport
+    private let notifier: AlertNotifier
     private let defaults: UserDefaults
     private static let showsRemainingKey = "showsRemaining"
+    private static let alertsEnabledKey = "alertsEnabled"
 
     init(
         store: any CredentialStore = KeychainCredentialStore(),
         transport: any UsageTransport = URLSessionTransport(),
+        notifier: AlertNotifier = AlertNotifier(),
         defaults: UserDefaults = .standard
     ) {
         self.store = store
         self.transport = transport
+        self.notifier = notifier
         self.defaults = defaults
         self.showsRemaining = defaults.bool(forKey: Self.showsRemainingKey)
+        self.alertsEnabled = defaults.bool(forKey: Self.alertsEnabledKey)
         observeSleepAndWake()
         Task { await restoreCredential() }
+        if alertsEnabled { Task { await requestAlertPermission() } }
     }
 
     var snapshot: Snapshot? { state.lastSnapshot }
@@ -164,7 +183,42 @@ final class AppModel {
         if case .failed(let failure) = result {
             Self.pollLog.error("Usage fetch failed: \(String(describing: failure), privacy: .public)")
         }
+        if case .snapshot(let fresh) = result {
+            let decision = AlertDecision.decide(previous: alertState, snapshot: fresh)
+            alertState = decision.state
+            deliver(decision.alerts)
+        }
         transition(to: state.applying(result, now: Date()))
+    }
+
+    // MARK: - Alerts
+
+    private func requestAlertPermission() async {
+        record(permission: await notifier.requestPermission())
+    }
+
+    /// Re-reads the answer without prompting. The popover calls this on open, so a user
+    /// who just fixed it in System Settings sees the denied line go away.
+    func refreshAlertPermission() {
+        guard alertsEnabled else { return }
+        Task { record(permission: await notifier.permission()) }
+    }
+
+    private func record(permission: AlertPermission) {
+        if permission != alertPermission {
+            Self.alertLog.notice("Notification permission: \(String(describing: permission), privacy: .public)")
+        }
+        alertPermission = permission
+    }
+
+    /// Hands a Snapshot's Alerts to the notification center. Nothing leaves while the
+    /// toggle is off or macOS has not granted permission; the state was updated regardless.
+    private func deliver(_ alerts: [Alert]) {
+        guard alertsEnabled, alertPermission == .granted, !alerts.isEmpty else { return }
+        for alert in alerts {
+            Self.alertLog.notice("Alert: \(alert.title, privacy: .public)")
+        }
+        Task { for alert in alerts { await notifier.deliver(alert) } }
     }
 
     /// Logs a line only when the case or reason changes, not on every 30 s Snapshot.
@@ -242,6 +296,7 @@ final class AppModel {
     private static let subsystem = Bundle.main.bundleIdentifier ?? "tracklaude"
     private static let log = Logger(subsystem: subsystem, category: "auth")
     private static let pollLog = Logger(subsystem: subsystem, category: "poll")
+    private static let alertLog = Logger(subsystem: subsystem, category: "alerts")
 
     /// The banner's one button.
     func perform(_ action: PopoverBanner.Action) {
@@ -275,6 +330,9 @@ final class AppModel {
                     credential: Credential(refreshToken: tokens.refreshToken),
                     accessToken: tokens.accessToken, store: store, transport: transport
                 )
+                // Why: a new sign-in may be a different account; its Windows are not a
+                // continuation of the old ones, so they get the quiet first sighting again.
+                alertState = AlertState()
                 transition(to: .polling(resumeState.lastSnapshot))
                 poll(.timer)
             } catch {

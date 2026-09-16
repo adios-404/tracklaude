@@ -2,7 +2,7 @@ import SwiftUI
 import TracklaudeCore
 
 /// The popover shown on click: the banner (when something is wrong), a row per Window,
-/// the used ↔ remaining toggle, and the footer.
+/// the used ↔ remaining toggle, the Alerts toggle, and the footer.
 struct PopoverView: View {
     @Bindable var model: AppModel
 
@@ -22,6 +22,7 @@ struct PopoverView: View {
                 if model.snapshot != nil {
                     modeToggle
                 }
+                alertsToggle
                 Divider()
                 footer(now: context.date)
             }
@@ -29,7 +30,10 @@ struct PopoverView: View {
         .padding(12)
         .frame(width: Self.width)
         // MenuBarExtra rebuilds the content view on each open, so this fires per open.
-        .onAppear { model.poll(.popoverOpened) }
+        .onAppear {
+            model.poll(.popoverOpened)
+            model.refreshAlertPermission()
+        }
     }
 
     /// The plain-English reason and the one button that fixes it (spec › Popover).
@@ -82,6 +86,24 @@ struct PopoverView: View {
         } else if case .polling = model.state {
             Text("Fetching usage…")
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Alerts on ↔ off (spec › Alerts). When macOS has refused permission the toggle alone
+    /// would lie — say so, and point at the one place that can fix it.
+    @ViewBuilder
+    private var alertsToggle: some View {
+        Toggle("Alerts at 80, 90 and 100%", isOn: $model.alertsEnabled)
+            .toggleStyle(.checkbox)
+        if model.alertsEnabled, model.alertPermission == .denied {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Notifications are off for tracklaude.", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Open System Settings") { NSWorkspace.shared.open(AlertNotifier.systemSettingsURL) }
+                    .controlSize(.small)
+            }
         }
     }
 
