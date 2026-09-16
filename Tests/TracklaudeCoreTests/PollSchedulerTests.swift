@@ -82,7 +82,28 @@ func cooldownIgnoresAutomaticFetches() {
 
 @Test("the Refresh button is disabled for 5 s after a manual Refresh and enabled after")
 func refreshAvailability() {
-    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastManualRefresh: now.addingTimeInterval(-1)) == false)
-    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastManualRefresh: now.addingTimeInterval(-5)) == true)
-    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastManualRefresh: nil) == true)
+    #expect(PollScheduler.isManualRefreshAllowed(state: .active, now: now, lastManualRefresh: now.addingTimeInterval(-1)) == false)
+    #expect(PollScheduler.isManualRefreshAllowed(state: .active, now: now, lastManualRefresh: now.addingTimeInterval(-5)) == true)
+    #expect(PollScheduler.isManualRefreshAllowed(state: .active, now: now, lastManualRefresh: nil) == true)
+}
+
+// Ticket 05: backing off after a 429.
+
+@Test("while backing off, every trigger waits for the lockout to end — a Refresh must not spend a request that will be refused", arguments: PollTrigger.allCases)
+func backingOffWaitsForUntil(trigger: PollTrigger) {
+    let until = now.addingTimeInterval(300)
+    #expect(next(.backingOff(until: until), lastFetch: -2, lastManualRefresh: -60, trigger: trigger) == until)
+}
+
+@Test("a lockout that ended while the Mac slept is fetched now on wake, not in the past")
+func expiredBackoffFetchesNow() {
+    #expect(next(.backingOff(until: now.addingTimeInterval(-10)), lastFetch: -400, trigger: .wake) == now)
+    #expect(next(.backingOff(until: now.addingTimeInterval(-10)), lastFetch: -400, trigger: .timer) == now)
+}
+
+@Test("the Refresh button is disabled for the whole lockout, even outside the 5 s cooldown")
+func refreshDisabledWhileBackingOff() {
+    #expect(PollScheduler.isManualRefreshAllowed(state: .backingOff(until: now.addingTimeInterval(1)), now: now, lastManualRefresh: nil) == false)
+    #expect(PollScheduler.isManualRefreshAllowed(state: .active, now: now, lastManualRefresh: nil) == true)
+    #expect(PollScheduler.isManualRefreshAllowed(state: .active, now: now, lastManualRefresh: now.addingTimeInterval(-1)) == false)
 }

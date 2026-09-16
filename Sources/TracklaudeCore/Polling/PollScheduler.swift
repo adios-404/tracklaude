@@ -8,6 +8,8 @@ public enum PollState: Equatable, Sendable {
     case active
     /// Signed in, Mac asleep: the timer is suspended.
     case asleep
+    /// A 429 said not before `until`. Nothing — not even Refresh — fetches earlier.
+    case backingOff(until: Date)
 }
 
 /// Why the scheduler is being asked.
@@ -42,12 +44,17 @@ public enum PollScheduler {
         switch state {
         case .signedOut, .asleep:
             return nil
+        case .backingOff(let until):
+            // Why: requests inside a lockout are refused, not punished (observed 2026-09-16),
+            // so an early Refresh only wastes budget. Never in the past: the Mac may have
+            // slept through `until`.
+            return max(until, now)
         case .active:
             switch trigger {
             case .timer:
                 return cadenceSlot(after: lastFetch, now: now)
             case .manualRefresh:
-                return isManualRefreshAllowed(now: now, lastManualRefresh: lastManualRefresh)
+                return isManualRefreshAllowed(state: state, now: now, lastManualRefresh: lastManualRefresh)
                     ? now
                     : cadenceSlot(after: lastFetch, now: now)
             case .wake, .popoverOpened:
@@ -57,7 +64,8 @@ public enum PollScheduler {
     }
 
     /// Drives the Refresh button's enabled state.
-    public static func isManualRefreshAllowed(now: Date, lastManualRefresh: Date?) -> Bool {
+    public static func isManualRefreshAllowed(state: PollState, now: Date, lastManualRefresh: Date?) -> Bool {
+        if case .backingOff(let until) = state, until > now { return false }
         guard let lastManualRefresh else { return true }
         return now.timeIntervalSince(lastManualRefresh) >= manualCooldown
     }
