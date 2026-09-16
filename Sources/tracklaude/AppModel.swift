@@ -20,6 +20,11 @@ final class AppModel {
     /// through a long backoff, so Time-to-Reset never lags the wall clock by more than one
     /// interval. The popover ticks its own clock once a second while open.
     private(set) var now = Date()
+    /// Used ↔ remaining (spec › Popover). Flips every percentage, menu bar included, and
+    /// survives a relaunch. Not a secret, so UserDefaults is its home.
+    var showsRemaining: Bool {
+        didSet { defaults.set(showsRemaining, forKey: Self.showsRemainingKey) }
+    }
 
     /// Holds the Credential and access token (memory only, ADR-0001) and does the
     /// 401 → refresh → retry dance. `nil` exactly while not signed in.
@@ -38,13 +43,18 @@ final class AppModel {
 
     private let store: any CredentialStore
     private let transport: any UsageTransport
+    private let defaults: UserDefaults
+    private static let showsRemainingKey = "showsRemaining"
 
     init(
         store: any CredentialStore = KeychainCredentialStore(),
-        transport: any UsageTransport = URLSessionTransport()
+        transport: any UsageTransport = URLSessionTransport(),
+        defaults: UserDefaults = .standard
     ) {
         self.store = store
         self.transport = transport
+        self.defaults = defaults
+        self.showsRemaining = defaults.bool(forKey: Self.showsRemainingKey)
         observeSleepAndWake()
         Task { await restoreCredential() }
     }

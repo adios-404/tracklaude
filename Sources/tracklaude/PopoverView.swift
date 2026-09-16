@@ -1,10 +1,12 @@
 import SwiftUI
 import TracklaudeCore
 
-/// The popover shown on click: the banner (when something is wrong), a bare usage
-/// readout, and the footer.
+/// The popover shown on click: the banner (when something is wrong), a row per Window,
+/// the used ↔ remaining toggle, and the footer.
 struct PopoverView: View {
-    let model: AppModel
+    @Bindable var model: AppModel
+
+    private static let width: CGFloat = 300
 
     var body: some View {
         // Why: the footer's "Updated N s ago", the Refresh cooldown and the rate-limit
@@ -17,12 +19,15 @@ struct PopoverView: View {
                     bannerView(banner)
                 }
                 usageSection(now: context.date)
+                if model.snapshot != nil {
+                    modeToggle
+                }
                 Divider()
                 footer(now: context.date)
             }
         }
         .padding(12)
-        .frame(minWidth: 260)
+        .frame(width: Self.width)
         // MenuBarExtra rebuilds the content view on each open, so this fires per open.
         .onAppear { model.poll(.popoverOpened) }
     }
@@ -63,31 +68,30 @@ struct PopoverView: View {
         }
     }
 
-    /// A bare readout of the last Snapshot — kept, dimmed, while Stale; the full row layout
-    /// is ticket 06.
+    /// The rows for the last Snapshot — kept, dimmed, while Stale.
     @ViewBuilder
     private func usageSection(now: Date) -> some View {
         if let snapshot = model.snapshot {
-            Group {
-                windowLine("5-hour", snapshot.fiveHour, now: now)
-                windowLine("7-day", snapshot.sevenDay, now: now)
-                ForEach(snapshot.perModel, id: \.model) { entry in
-                    windowLine(entry.model, entry.window, now: now)
-                }
-            }
-            .foregroundStyle(model.state.staleReason == nil ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+            UsageRowsView(
+                readout: PopoverRows.render(
+                    snapshot: snapshot, remaining: model.showsRemaining, now: now,
+                    locale: .autoupdatingCurrent, timeZone: .autoupdatingCurrent
+                ),
+                isStale: model.state.staleReason != nil
+            )
         } else if case .polling = model.state {
             Text("Fetching usage…")
                 .foregroundStyle(.secondary)
         }
     }
 
-    private func windowLine(_ name: String, _ window: TracklaudeCore.Window?, now: Date) -> some View {
-        HStack {
-            Text(name)
-            Spacer()
-            Text(MenuBarText.render(window: window, remaining: false, now: now))
-                .monospacedDigit()
+    /// Used ↔ remaining (spec › Popover). The menu bar flips with it.
+    private var modeToggle: some View {
+        Picker("Mode", selection: $model.showsRemaining) {
+            Text("Used").tag(false)
+            Text("Remaining").tag(true)
         }
+        .pickerStyle(.segmented)
+        .labelsHidden()
     }
 }
