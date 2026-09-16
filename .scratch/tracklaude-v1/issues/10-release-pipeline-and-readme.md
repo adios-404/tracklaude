@@ -24,3 +24,19 @@
       builds with a self-signed cert they trust once, and stop being prompted during
       development. Creating and trusting that cert is a manual, owner-only step; document it
       in the README's "build from source" section.
+
+## Comments
+
+**2026-09-17 — handoff from ticket 09.** `make trust` (also a CI step) runs the three
+trust checks: log redaction grep, hostname allowlist over the binary *and* `Sources/`, and
+the embedded entitlements. Run it in the release job after `make sign` so a release cannot
+ship what CI would refuse. README wording that is now backed by a test: "every log line
+passes through a redactor that strips `sk-ant-…` tokens and `Bearer` values", "the binary
+and source name no host but `claude.ai`, `console.anthropic.com`, `api.anthropic.com`,
+`localhost`/`127.0.0.1`", "entitlements are exactly app-sandbox, network.client,
+network.server", "no log files". Say plainly what the checks cannot see (a host assembled
+at runtime; TLDs like `.app`/`.sh` are excluded from the scan) — the README should invite
+source review, not replace it. Do not promise a polling rate (08's 429 finding). The
+`x-apple.systempreferences:` URL scheme (System Settings deep links) is not a host and
+does not trip the check.
+
