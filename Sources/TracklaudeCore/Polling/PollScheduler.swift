@@ -19,21 +19,24 @@ public enum PollTrigger: Equatable, Sendable, CaseIterable {
     case manualRefresh
 }
 
-/// Decides when the next usage fetch happens. Pure: (state, now, last fetch, trigger) in,
-/// a Date out — `nil` means "do not fetch". The executable owns the actual timer.
+/// Decides when the next usage fetch happens. Pure: (state, now, last fetch, last manual
+/// Refresh, trigger) in, a Date out — `nil` means "do not fetch". The executable owns the
+/// actual timer.
 public enum PollScheduler {
     /// 30 s flat (spec › Polling). Ticket 03 measured the endpoint reflecting new usage at
     /// ≤ 10 s, so the interval is not coarser than the data.
     public static let interval: TimeInterval = 30
     /// A double-click on Refresh must not double-fetch; the button is disabled this long
-    /// after any fetch. Measured from the last fetch, not the last click: a fetch that just
-    /// landed on its own has nothing newer to show either.
+    /// after a manual Refresh. Why not after *any* fetch: opening the popover fetches too,
+    /// and a Refresh button that is grey every time the popover appears reads as broken
+    /// (observed 2026-09-16).
     public static let manualCooldown: TimeInterval = 5
 
     public static func nextFetch(
         state: PollState,
         now: Date,
         lastFetch: Date?,
+        lastManualRefresh: Date?,
         trigger: PollTrigger
     ) -> Date? {
         switch state {
@@ -44,7 +47,7 @@ public enum PollScheduler {
             case .timer:
                 return cadenceSlot(after: lastFetch, now: now)
             case .manualRefresh:
-                return isManualRefreshAllowed(now: now, lastFetch: lastFetch)
+                return isManualRefreshAllowed(now: now, lastManualRefresh: lastManualRefresh)
                     ? now
                     : cadenceSlot(after: lastFetch, now: now)
             case .wake, .popoverOpened:
@@ -54,9 +57,9 @@ public enum PollScheduler {
     }
 
     /// Drives the Refresh button's enabled state.
-    public static func isManualRefreshAllowed(now: Date, lastFetch: Date?) -> Bool {
-        guard let lastFetch else { return true }
-        return now.timeIntervalSince(lastFetch) >= manualCooldown
+    public static func isManualRefreshAllowed(now: Date, lastManualRefresh: Date?) -> Bool {
+        guard let lastManualRefresh else { return true }
+        return now.timeIntervalSince(lastManualRefresh) >= manualCooldown
     }
 
     /// The regular slot: 30 s after the last fetch, never in the past.

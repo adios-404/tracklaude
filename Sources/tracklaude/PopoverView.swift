@@ -31,7 +31,7 @@ struct PopoverView: View {
             Spacer()
             if model.auth == .signedIn {
                 Button("Refresh") { model.refresh() }
-                    .disabled(!PollScheduler.isManualRefreshAllowed(now: now, lastFetch: model.lastFetch))
+                    .disabled(!PollScheduler.isManualRefreshAllowed(now: now, lastManualRefresh: model.lastManualRefresh))
                     .keyboardShortcut("r")
             }
             Button("Quit") {

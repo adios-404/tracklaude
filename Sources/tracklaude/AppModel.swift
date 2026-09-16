@@ -22,6 +22,8 @@ final class AppModel {
     /// When the last fetch was issued (not when it landed): the cadence and the Refresh
     /// cooldown both count from here, so an in-flight fetch is never doubled.
     private(set) var lastFetch: Date?
+    /// Drives the Refresh button's 5 s cooldown; automatic fetches do not touch it.
+    private(set) var lastManualRefresh: Date?
     /// The clock the menu bar renders with. Advanced on every fetch, so Time-to-Reset lags
     /// the wall clock by at most one interval even when a fetch fails. The popover ticks
     /// its own clock once a second while open.
@@ -71,7 +73,8 @@ final class AppModel {
         cancelTimer()
         let now = Date()
         guard let next = PollScheduler.nextFetch(
-            state: pollState, now: now, lastFetch: lastFetch, trigger: trigger
+            state: pollState, now: now, lastFetch: lastFetch,
+            lastManualRefresh: lastManualRefresh, trigger: trigger
         ) else { return }
         let delay = next.timeIntervalSince(now)
         guard delay > 0 else {
@@ -107,6 +110,7 @@ final class AppModel {
         let issuedAt = Date()
         lastFetch = issuedAt
         now = issuedAt
+        if trigger == .manualRefresh { lastManualRefresh = issuedAt }
         fetchGeneration += 1
         let generation = fetchGeneration
         Self.pollLog.notice("Usage fetch issued (\(String(describing: trigger), privacy: .public))")

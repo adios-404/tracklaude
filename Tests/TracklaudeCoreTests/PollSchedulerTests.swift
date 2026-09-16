@@ -5,11 +5,17 @@ import TracklaudeCore
 // The scheduler is pure: (state, now, last fetch, trigger) → when to fetch next, or nil.
 private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-private func next(_ state: PollState, lastFetch: TimeInterval?, trigger: PollTrigger) -> Date? {
+private func next(
+    _ state: PollState,
+    lastFetch: TimeInterval?,
+    lastManualRefresh: TimeInterval? = nil,
+    trigger: PollTrigger
+) -> Date? {
     PollScheduler.nextFetch(
         state: state,
         now: now,
         lastFetch: lastFetch.map { now.addingTimeInterval($0) },
+        lastManualRefresh: lastManualRefresh.map { now.addingTimeInterval($0) },
         trigger: trigger
     )
 }
@@ -56,20 +62,27 @@ func popoverOpenFetchesNow() {
 
 @Test("manual Refresh fetches immediately once the 5 s cooldown has passed")
 func manualRefreshOutsideCooldown() {
-    #expect(next(.active, lastFetch: -5, trigger: .manualRefresh) == now)
-    #expect(next(.active, lastFetch: -20, trigger: .manualRefresh) == now)
-    #expect(next(.active, lastFetch: nil, trigger: .manualRefresh) == now)
+    #expect(next(.active, lastFetch: -5, lastManualRefresh: -5, trigger: .manualRefresh) == now)
+    #expect(next(.active, lastFetch: -20, lastManualRefresh: -20, trigger: .manualRefresh) == now)
+    #expect(next(.active, lastFetch: nil, lastManualRefresh: nil, trigger: .manualRefresh) == now)
 }
 
 @Test("manual Refresh inside the cooldown does not fetch; the regular slot stands")
 func manualRefreshInsideCooldown() {
-    #expect(next(.active, lastFetch: -1, trigger: .manualRefresh) == now.addingTimeInterval(29))
-    #expect(next(.active, lastFetch: -4.9, trigger: .manualRefresh) == now.addingTimeInterval(25.1))
+    #expect(next(.active, lastFetch: -1, lastManualRefresh: -1, trigger: .manualRefresh) == now.addingTimeInterval(29))
+    #expect(next(.active, lastFetch: -4.9, lastManualRefresh: -4.9, trigger: .manualRefresh) == now.addingTimeInterval(25.1))
 }
 
-@Test("the Refresh button is disabled for 5 s after a fetch and enabled after")
+@Test("the cooldown counts from the last manual Refresh, not from a fetch the popover or timer issued")
+func cooldownIgnoresAutomaticFetches() {
+    // The popover just opened and fetched; Refresh is still usable at once.
+    #expect(next(.active, lastFetch: -0.5, lastManualRefresh: nil, trigger: .manualRefresh) == now)
+    #expect(next(.active, lastFetch: -0.5, lastManualRefresh: -60, trigger: .manualRefresh) == now)
+}
+
+@Test("the Refresh button is disabled for 5 s after a manual Refresh and enabled after")
 func refreshAvailability() {
-    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastFetch: now.addingTimeInterval(-1)) == false)
-    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastFetch: now.addingTimeInterval(-5)) == true)
-    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastFetch: nil) == true)
+    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastManualRefresh: now.addingTimeInterval(-1)) == false)
+    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastManualRefresh: now.addingTimeInterval(-5)) == true)
+    #expect(PollScheduler.isManualRefreshAllowed(now: now, lastManualRefresh: nil) == true)
 }
