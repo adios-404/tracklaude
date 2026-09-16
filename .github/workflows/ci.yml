@@ -32,13 +32,7 @@ jobs:
       - name: Bundle and sign
         run: make sign
 
-      # Trust guarantees (ticket 09): the README's promises, enforced. Each script is
-      # runnable locally and was verified to fail when its property is broken.
-      - name: Every log call goes through the redactor
-        run: sh Scripts/check-log-redaction.sh
-
-      - name: Release binary names no host outside the allowlist
-        run: sh Scripts/check-hostnames.sh .build/release/tracklaude
-
-      - name: Signed app carries exactly app-sandbox, network.client, network.server
-        run: sh Scripts/check-entitlements.sh dist/tracklaude.app
+      # Trust guarantees (ticket 09): the README's promises, enforced. Runs the three
+      # Scripts/check-*.sh scripts; each was verified to fail when its property is broken.
+      - name: Trust checks — log redaction, hostname allowlist, entitlements
+        run: make trust

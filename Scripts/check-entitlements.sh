@@ -1,14 +1,19 @@
 #!/bin/sh
 # The signed app carries exactly app-sandbox, network.client and network.server — nothing
 # more (spec › Packaging; backs user story 28). Reads the entitlements codesign actually
-# embedded, not the source plist, so a Makefile slip is caught too.
+# embedded, not the source plist, so a Makefile slip is caught too. Every <key> counts,
+# not just com.apple.security.*: keychain-access-groups or a com.apple.developer.* key
+# would be exactly the kind of extra entitlement this exists to refuse.
 set -eu
+cd "$(dirname "$0")/.."
 
 APP="${1:-dist/tracklaude.app}"
 [ -d "$APP" ] || { echo "FAIL: no app bundle at $APP (run 'make sign' first)" >&2; exit 2; }
 
+codesign -dv "$APP" >/dev/null 2>&1 || { echo "FAIL: $APP is not signed" >&2; exit 1; }
+
 expected=$(printf 'com.apple.security.app-sandbox\ncom.apple.security.network.client\ncom.apple.security.network.server\n')
-actual=$(codesign -d --entitlements :- "$APP" 2>/dev/null | grep -o 'com\.apple\.security[a-z.-]*' | sort -u)
+actual=$(codesign -d --entitlements :- "$APP" 2>/dev/null | grep -o '<key>[^<]*</key>' | sed -E 's#</?key>##g' | sort -u)
 
 if [ "$expected" != "$actual" ]; then
     echo "FAIL: $APP entitlements differ from the allowlist" >&2
