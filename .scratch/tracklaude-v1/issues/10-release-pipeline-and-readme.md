@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 Walking skeleton
 
-**Status:** done (2026-09-17, commits 8258254 + README/screenshot commit)
+**Status:** done (2026-09-17, commits 8258254, f73f87b, + crash fix and CI artefact commits)
 
 - [x] Tagging `v0.0.1-test` on the private repo produces a Release with `tracklaude-v0.0.1-test.zip` and `.sha256`; the zip unpacks to a launchable app; the tag and Release are deleted afterwards
 - [x] Version in Info.plist equals the tag
@@ -56,7 +56,8 @@ Makefile: `SIGN_IDENTITY ?= -` on `sign`, and `zip` (`ditto -c -k --keepParent -
 `main`) → run 35159444021 green on every step → pre-release with `tracklaude-v0.0.1-test.zip`
 (294 946 B) and `.sha256` (93 B); body showed the run link and hash. `gh release download`
 → `shasum -a 256 -c` OK → `ditto -x -k` → `codesign --verify` valid, entitlements exactly the
-three, `Info.plist` `0.0.1-test`. Release and tag deleted (`gh release delete --cleanup-tag`;
+three, `Info.plist` `0.0.1-test`. **Launch: the CI build crashed** — see Findings; fixed in the
+commit after, and re-verified on the CI artefact (below). Release and tag deleted (`gh release delete --cleanup-tag`;
 `git ls-remote --tags` and `gh release list` both empty). Locally the workflow's shell steps
 were also run against `v0.1.0` (pass) and `v9.9.9` (tag guard fails, exit 1). Launch of the
 downloaded copy: see below. CI on `main` (8258254) green with the new `zip` step.
@@ -82,6 +83,18 @@ downloaded copy: see below. CI on `main` (8258254) green with the new `zip` step
   not cover it and dropping it keeps `unzip` output free of `._*` files. Verified both ways.
 
 **Findings.**
+- **The CI-built binary crashed on launch; every local build ran.** `open`ing the
+  downloaded `v0.0.1-test` app died in ~200 ms: SIGTRAP in `dispatch_assert_queue_fail`
+  inside `AlertNotifier.requestPermission()`'s completion closure. In a `@MainActor` class
+  that closure is inferred main-actor-isolated; the runner's Swift 6.0 / older SDK compiles
+  a runtime queue assertion into it and `UNUserNotificationCenter` calls it on its own
+  queue. Swift 6.2 locally emits no such check, so eight tickets of real-app verification
+  never saw it. Fix: the three completion closures are explicitly `@Sendable`
+  (nonisolated). `LoopbackSockets` (Network handlers) is a plain nonisolated class, so the
+  sign-in path does not have the pattern. **Consequence for every later ticket: a launch
+  or behaviour check on "the release" must use the CI-built artefact** — `ci.yml` now
+  uploads `dist/tracklaude-v*.zip*` (7-day retention) on every push; `gh run download
+  <run-id>`. `make install` proves nothing about what ships.
 - **The usage endpoint budget is shared with something else on this account.** The app
   429'd at 10-minute spacing, one request each (backoff #3 → #6 over 30 min, `Retry-After:
   0` every time), and again the moment the popover opened after recovery. Nothing on this
