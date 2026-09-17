@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 Walking skeleton
 
-**Status:** done (2026-09-17, commits 8258254, f73f87b, + crash fix and CI artefact commits)
+**Status:** done (2026-09-17, commits 8258254, f73f87b, cfc700a, 730bf5b + this note)
 
 - [x] Tagging `v0.0.1-test` on the private repo produces a Release with `tracklaude-v0.0.1-test.zip` and `.sha256`; the zip unpacks to a launchable app; the tag and Release are deleted afterwards
 - [x] Version in Info.plist equals the tag
@@ -95,6 +95,14 @@ downloaded copy: see below. CI on `main` (8258254) green with the new `zip` step
   or behaviour check on "the release" must use the CI-built artefact** — `ci.yml` now
   uploads `dist/tracklaude-v*.zip*` (7-day retention) on every push; `gh run download
   <run-id>`. `make install` proves nothing about what ships.
+  Re-verified on the artefact of the fix commit (cfc700a): launched via `open -n`, alive
+  past both notification-center callbacks, `State: signedOut → polling`, one fetch, no
+  crash report.
+- **Never run a second build against the owner's Keychain item.** The test copy read the
+  shared credential (owner clicked Allow), refreshed, and the rotated refresh token left
+  the installed app `stale(sessionExpired)` 22 s later — the rotation race from ADR-0001,
+  now seen first-hand. For launch checks of a CI build, Deny the Keychain prompt (the app
+  then shows `⚠ sign in`, which is proof enough), or test in a separate macOS user.
 - **The usage endpoint budget is shared with something else on this account.** The app
   429'd at 10-minute spacing, one request each (backoff #3 → #6 over 30 min, `Retry-After:
   0` every time), and again the moment the popover opened after recovery. Nothing on this
