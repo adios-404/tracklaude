@@ -13,6 +13,14 @@ enum AlertPermission: Equatable {
 /// Delivers Alerts through `UNUserNotificationCenter` (spec › Alerts). Untested by
 /// decision (spec › Testing Decisions): the real notification center, like the real
 /// Keychain, is covered by the manual check on the app.
+///
+/// Why every completion closure below is spelled `@Sendable`: the center calls them on
+/// its own queue. Left implicit, a closure in this `@MainActor` class is inferred
+/// main-actor-isolated, and the CI toolchain (Swift 6.0, older SDK) then compiles a
+/// runtime queue assertion into it that trips the moment the center calls back —
+/// the CI-built v0.0.1-test crashed on launch this way (SIGTRAP in
+/// `dispatch_assert_queue_fail`, 2026-09-17). Local Swift 6.2 builds never showed it.
+/// `@Sendable` makes them nonisolated, so there is nothing to assert.
 @MainActor
 final class AlertNotifier {
     /// Verified 2026-09-17 on macOS 27: opens System Settings › Notifications.
@@ -38,7 +46,7 @@ final class AlertNotifier {
     func requestPermission() async -> AlertPermission {
         guard let center else { return .denied }
         let failure: (any Error)? = await withCheckedContinuation { continuation in
-            center.requestAuthorization(options: [.alert, .sound]) { _, error in continuation.resume(returning: error) }
+            center.requestAuthorization(options: [.alert, .sound]) { @Sendable _, error in continuation.resume(returning: error) }
         }
         if let failure {
             Self.log.error("Notification permission request failed: \(failure.localizedDescription)")
@@ -49,7 +57,7 @@ final class AlertNotifier {
     func permission() async -> AlertPermission {
         guard let center else { return .denied }
         let status = await withCheckedContinuation { continuation in
-            center.getNotificationSettings { continuation.resume(returning: $0.authorizationStatus) }
+            center.getNotificationSettings { @Sendable settings in continuation.resume(returning: settings.authorizationStatus) }
         }
         switch status {
         case .authorized, .provisional: return .granted
@@ -67,7 +75,7 @@ final class AlertNotifier {
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         let failure: (any Error)? = await withCheckedContinuation { continuation in
-            center.add(request) { error in continuation.resume(returning: error) }
+            center.add(request) { @Sendable error in continuation.resume(returning: error) }
         }
         if let failure {
             Self.log.error("Could not deliver \(alert.title): \(failure.localizedDescription)")
