@@ -115,3 +115,14 @@ downloaded copy: see below. CI on `main` (8258254) green with the new `zip` step
   spawned as a separate task.
 - The bundle has no icon yet; the pipeline does not freeze one (Info.plist has no
   `CFBundleIconFile`). The owner's logo ask is still open — raise before 12.
+
+**Review** (`/code-review` from 680b2ad, two axes). Spec: no blocking findings; the one gap
+(no bundle icon, spec › Packaging) predates the ticket and is the owner's logo ask — ticket
+12 must not cut v1.0 without it. Standards: fixed — README over-claims ("the code will not"
+differ across toolchains: it did, see the crash; "no identifiers" when URLSession adds
+`User-Agent`; "one of the five" against a six-row table; "no file-writing call" beyond what
+the grep sees; undated/unexercised Gatekeeper and self-signed-cert steps now say so), and
+`ci.yml` re-signing three times (now `make trust zip`). Not changed: artefact name spelled
+in Makefile, release.yml and README (KISS, three sites); the workflows' shared setup block
+(two files); the three identical continuation wrappers in `AlertNotifier`; the Info.plist
+check that partly re-proves the tag guard (kept — it checks the artefact, not the inputs).

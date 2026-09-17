@@ -41,7 +41,9 @@ Requires macOS 14 or later. Homebrew is coming; for now:
      **System Settings → Privacy & Security**, scroll to the notice that tracklaude was
      blocked, and click **Open Anyway**.
 
-   This is a one-time step per download.
+   This is a one-time step per download. (The macOS 15+ path is Apple's documented one;
+   this project's own machine runs macOS 26 and the step was not walked through for the
+   README — say so in an issue if the wording is off.)
 5. Click the menu-bar item and **Sign in**. Your default browser opens Anthropic's own
    login page; after you approve, the browser lands on a one-line page served by the app on
    `localhost` and you can close the tab. Nothing is pasted anywhere.
@@ -68,13 +70,14 @@ Exactly three hosts, all Anthropic's, plus loopback during sign-in. Nothing else
 |---|---|---|
 | `claude.ai` | Sign-in | Opens `https://claude.ai/oauth/authorize` in your browser (OAuth 2.0 with PKCE). The app itself never connects here — your browser does. |
 | `console.anthropic.com` | Sign-in, and when the access token expires | `POST /v1/oauth/token` to exchange the sign-in code for tokens, and later to refresh them. |
-| `api.anthropic.com` | Every poll | `GET /api/oauth/usage` with `Authorization: Bearer <access token>` and `anthropic-beta: oauth-2025-04-20`. That is the whole request: no browser-impersonating headers, no identifiers, no analytics. |
+| `api.anthropic.com` | Every poll | `GET /api/oauth/usage` with `Authorization: Bearer <access token>` and `anthropic-beta: oauth-2025-04-20`. Those are the only headers the app adds (macOS's `URLSession` adds its usual `User-Agent` and `Accept` ones): no browser-impersonating headers, no analytics. |
 | `localhost` (`127.0.0.1` / `::1`), port 1456 or 1458 | Sign-in only | A loopback-only listener that receives the browser's OAuth callback, checks the `state` value, and shuts down. It is bound to the loopback interface, not to your network. |
 
 There is no update check, no crash reporter, no telemetry endpoint, no CDN. CI enforces this
 with [`Scripts/check-hostnames.sh`](Scripts/check-hostnames.sh): every URL host, IPv4
-literal and dotted name found in the built binary *and* in `Sources/` must be one of the
-five above, or the build fails.
+literal and dotted name found in the built binary *and* in `Sources/` must be one of
+`claude.ai`, `console.anthropic.com`, `api.anthropic.com`, `localhost`, `127.0.0.1`, or the
+build fails.
 
 What that check cannot see: a host assembled at runtime from pieces, and names under TLDs
 the extractor ignores because they double as ordinary words (`.app`, `.sh`, `.so`, `.it`,
@@ -138,7 +141,8 @@ unless they are exactly those three
 Enforced by `make trust`, which runs in CI on every push and in the release job before
 anything is published:
 
-- every log line is redacted, and no other logging or file-writing call exists;
+- every log line is redacted, and no other logging call (nor any of the common
+  file-writing calls: `print`, `NSLog`, `FileHandle`, `.write(to:)`) exists;
 - the binary and source name no host outside the five listed above;
 - the signed app carries exactly the three entitlements.
 
@@ -166,8 +170,9 @@ shasum -a 256 -c tracklaude-vX.Y.Z.zip.sha256
 Expected output: `tracklaude-vX.Y.Z.zip: OK`. The `.sha256` file is the one attached to
 the Release; compare it with the hash printed in the linked workflow run's log if you want
 to rule out a tampered Release page too. To go further, build from source at the same
-tag and compare behaviour; the ad-hoc signature is not bit-reproducible across machines,
-so the zips will differ, but the code will not.
+tag and compare behaviour. The zips will differ — the ad-hoc signature is not reproducible
+across machines and your toolchain will not be the runner's — but the source is the same
+tagged commit, and the Release body names it.
 
 The version inside the app (`Info.plist`) always equals the tag; the release job refuses
 to publish otherwise.
@@ -194,7 +199,8 @@ make test
 With only Command Line Tools installed, bare `swift test` builds successfully but silently
 runs **zero** tests — SwiftPM cannot find Swift Testing's framework directory without
 Xcode. `make test` passes the missing search path. See the comment in the `Makefile`. The
-suite runs offline, in well under a second, and never touches your Keychain or your usage.
+suite runs offline (148 tests in ~10 ms after the build, 2026-09-17) and never touches your
+Keychain or your usage.
 
 ### Stop the Keychain prompt during development
 
@@ -216,7 +222,8 @@ it:
    ```
 
 `SIGN_IDENTITY` defaults to `-` (ad-hoc), which is what releases use. The certificate lives
-only on your machine and only affects builds you make there.
+only on your machine and only affects builds you make there. The Makefile side is verified;
+the Keychain Access steps are the standard recipe and have not been walked through here.
 
 ### Cutting a release (maintainers)
 
