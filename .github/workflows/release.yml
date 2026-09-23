@@ -75,3 +75,57 @@ jobs:
             --notes "$notes" \
             "dist/tracklaude-$GITHUB_REF_NAME.zip" \
             "dist/tracklaude-$GITHUB_REF_NAME.zip.sha256"
+
+  # Opens a pull request against adios-404/homebrew-tap bumping the cask to this tag's
+  # version and hash (ticket 11). A separate job so a tap failure can be re-run without
+  # re-publishing the Release, and so the tap token never shares a step with the build.
+  # A pull request, not a push: the tap's own CI audits the change, and merging it is the
+  # moment `brew upgrade` sees the new version. Pre-releases never reach the tap.
+  tap:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # The hash comes from the published Release, not a rebuild: the cask must name
+      # exactly the bytes users download.
+      - name: Read the published hash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --pattern "tracklaude-$GITHUB_REF_NAME.zip.sha256" --dir release
+          echo "SHA256=$(cut -d' ' -f1 "release/tracklaude-$GITHUB_REF_NAME.zip.sha256")" >> "$GITHUB_ENV"
+
+      # TAP_GITHUB_TOKEN: a fine-grained token limited to adios-404/homebrew-tap with
+      # Contents and Pull requests read/write — nothing on this repository.
+      - name: Open the tap pull request
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "TAP_GITHUB_TOKEN secret is not set; see ticket 11." >&2; exit 1; }
+          version="${GITHUB_REF_NAME#v}"
+          branch="tracklaude-$version"
+          gh auth setup-git
+          git clone --depth 1 https://github.com/adios-404/homebrew-tap.git tap
+          sh Scripts/bump-cask.sh "$version" "$SHA256" tap/Casks/tracklaude.rb
+          cd tap
+          if git diff --quiet; then
+            echo "Cask already at $version with this hash; nothing to open."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -qam "tracklaude $version"
+          # Why --force: a re-run after a failed PR step must replace its own branch.
+          git push --force origin "$branch"
+          if [ "$(gh pr list --head "$branch" --state open --json number --jq length)" = "0" ]; then
+            gh pr create --base main --head "$branch" --title "tracklaude $version" --body "Bumps the cask to [$GITHUB_REF_NAME]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$GITHUB_REF_NAME).
+
+          SHA-256 \`$SHA256\`, read from the Release's \`.sha256\` asset by [run $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). Merging publishes the update to \`brew upgrade\`."
+          else
+            echo "An open pull request for $branch already exists; its branch was updated."
+          fi

@@ -29,7 +29,20 @@ when you open the popover, and backs off when Anthropic returns 429.
 
 ## Install
 
-Requires macOS 14 or later. Homebrew is coming; for now:
+Requires macOS 14 or later.
+
+### With Homebrew
+
+```bash
+brew install adios-404/tap/tracklaude
+```
+
+Homebrew refuses the download unless it matches the SHA-256 in the cask, which the release
+workflow copies from the Release's own `.sha256` file. Then do the **Gatekeeper step** and
+**Sign in** (steps 4 and 5 below): Homebrew marks the app as downloaded, exactly like a
+browser does, and current Homebrew has no option to skip that. Update with `brew upgrade`.
+
+### From the Release zip
 
 1. Download `tracklaude-vX.Y.Z.zip` and `tracklaude-vX.Y.Z.zip.sha256` from the
    [latest Release](https://github.com/adios-404/tracklaude/releases/latest).
@@ -113,7 +126,7 @@ and [`Sources/TracklaudeCore/Usage/UsageFetch.swift`](Sources/TracklaudeCore/Usa
 ### No auto-update, on purpose
 
 tracklaude has no updater and no version check. You update by downloading the next Release
-(or, soon, `brew upgrade`). A self-updating app means every future release, signed by one
+(or run `brew upgrade`). A self-updating app means every future release, signed by one
 person's key, can silently replace the code you audited; without notarization there is no
 backstop. Removing the updater removes that dependency: the build you verified is the build
 that runs, until you choose otherwise. Reasoning: [ADR-0002](docs/adr/0002-no-auto-update.md).
@@ -236,6 +249,13 @@ git tag v0.2.0 && git push origin v0.2.0
 The release workflow tests, signs, runs the trust checks, zips, hashes, and publishes the
 Release with generated notes. A tag that does not match `VERSION` fails the job. Tags with
 a suffix (`v1.0.0-rc1`) are published as pre-releases.
+
+For a plain `vX.Y.Z` tag the workflow then opens a pull request on
+[adios-404/homebrew-tap](https://github.com/adios-404/homebrew-tap) bumping the cask's
+version and hash; that repository's CI audits it, and merging it is what `brew upgrade`
+sees. Pre-releases never reach the tap. The job needs the `TAP_GITHUB_TOKEN` repository
+secret: a fine-grained token for the tap repository only, with Contents and Pull requests
+read/write.
 
 ## Reading further
 

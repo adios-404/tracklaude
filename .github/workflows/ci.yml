@@ -28,6 +28,10 @@ jobs:
       - name: Test
         run: make test
 
+      # The release job's tap bump runs once per tag, unattended; test it on every push.
+      - name: Test the cask bump script
+        run: sh Scripts/test-bump-cask.sh
+
       # The release workflow's packaging path, exercised on every push so a broken
       # Makefile fails CI rather than a tagged release. One `sign` feeds both the trust
       # checks (ticket 09: the README's promises, enforced by the three Scripts/check-*.sh
