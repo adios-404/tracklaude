@@ -255,7 +255,8 @@ For a plain `vX.Y.Z` tag the workflow then opens a pull request on
 version and hash; that repository's CI audits it, and merging it is what `brew upgrade`
 sees. Pre-releases never reach the tap. The job needs the `TAP_GITHUB_TOKEN` repository
 secret: a fine-grained token for the tap repository only, with Contents and Pull requests
-read/write.
+read/write. `Scripts/setup-tap-token.sh` walks through creating it and stores it (run it
+again when the token expires).
 
 ## Reading further
 
