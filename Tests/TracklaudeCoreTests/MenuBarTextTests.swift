@@ -43,10 +43,28 @@ func staleIsDimmedWithReason() {
     #expect(MenuBarText.render(state: .stale(snapshot, .rateLimited), remaining: false, now: now) == MenuBarLabel(text: "42% · 2h14m ⚠ limited", isDimmed: true))
 }
 
-@Test("backing off reads as rate-limited")
-func backingOffIsLimited() {
-    let state = AppState.backingOff(snapshot, until: now.addingTimeInterval(300), consecutiveRateLimits: 1)
+// Ticket 16: a 429 on a reading younger than 10 min is not news. Observed 2026-10-03: the
+// refusals come whatever this app's rate (5 requests in 17 min, all refused), so the user
+// saw "⚠ limited" over a 24 s old reading for no reason they could act on.
+
+@Test("backing off on a reading younger than 10 min shows the live readout, not dimmed")
+func backingOffQuietWhileFresh() {
+    let recent = Snapshot(fiveHour: fiveHour, sevenDay: nil, fetchedAt: now.addingTimeInterval(-24))
+    let state = AppState.backingOff(recent, until: now.addingTimeInterval(60), consecutiveRateLimits: 1)
+    #expect(MenuBarText.render(state: state, remaining: false, now: now) == MenuBarLabel(text: "42% · 2h14m", isDimmed: false))
+}
+
+@Test("once the reading is 10 min old, backing off reads as rate-limited")
+func backingOffIsLimitedWhenOld() {
+    let old = Snapshot(fiveHour: fiveHour, sevenDay: nil, fetchedAt: now.addingTimeInterval(-600))
+    let state = AppState.backingOff(old, until: now.addingTimeInterval(60), consecutiveRateLimits: 3)
     #expect(MenuBarText.render(state: state, remaining: false, now: now) == MenuBarLabel(text: "42% · 2h14m ⚠ limited", isDimmed: true))
+}
+
+@Test("backing off before any reading says so at once")
+func backingOffWithoutSnapshot() {
+    let state = AppState.backingOff(nil, until: now.addingTimeInterval(60), consecutiveRateLimits: 1)
+    #expect(MenuBarText.render(state: state, remaining: false, now: now) == MenuBarLabel(text: "— ⚠ limited", isDimmed: true))
 }
 
 @Test("stale with no Snapshot yet still names the reason")

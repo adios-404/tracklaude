@@ -96,10 +96,15 @@ func isSignedInAccessor() {
     #expect(AppState.backingOff(nil, until: now, consecutiveRateLimits: 1).isSignedIn == true)
 }
 
-@Test("backing off reads as stale for rate limiting; healthy and signed-out states have no reason")
+@Test("backing off reads as rate-limited only once the reading is 10 min old; healthy and signed-out states have no reason")
 func staleReasonAccessor() {
-    #expect(AppState.backingOff(nil, until: now, consecutiveRateLimits: 1).staleReason == .rateLimited)
-    #expect(AppState.stale(nil, .sessionExpired).staleReason == .sessionExpired)
-    #expect(AppState.polling(snapshot).staleReason == nil)
-    #expect(AppState.signedOut.staleReason == nil)
+    let fresh = Snapshot(fiveHour: nil, sevenDay: nil, fetchedAt: now.addingTimeInterval(-599))
+    let old = Snapshot(fiveHour: nil, sevenDay: nil, fetchedAt: now.addingTimeInterval(-600))
+    #expect(AppState.backingOff(fresh, until: now, consecutiveRateLimits: 1).staleReason(now: now) == nil)
+    #expect(AppState.backingOff(old, until: now, consecutiveRateLimits: 1).staleReason(now: now) == .rateLimited)
+    #expect(AppState.backingOff(nil, until: now, consecutiveRateLimits: 1).staleReason(now: now) == .rateLimited)
+    #expect(AppState.stale(fresh, .sessionExpired).staleReason(now: now) == .sessionExpired)
+    #expect(AppState.stale(fresh, .offline).staleReason(now: now) == .offline)
+    #expect(AppState.polling(snapshot).staleReason(now: now) == nil)
+    #expect(AppState.signedOut.staleReason(now: now) == nil)
 }

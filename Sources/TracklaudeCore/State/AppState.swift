@@ -40,12 +40,24 @@ public enum AppState: Equatable, Sendable {
         }
     }
 
-    /// Backing off is rate limiting from the user's point of view.
-    public var staleReason: StaleReason? {
+    /// How old the last reading may be before backing off is shown as rate-limited
+    /// (ticket 16). Observed 2026-10-03: 429s with `Retry-After: 0` came whatever this
+    /// app's rate (5 requests in 17 min, all refused) and lasted 1–17 min; a reading a few
+    /// minutes old is still right, so warning over it was noise the user could not act on.
+    public static let rateLimitGrace: TimeInterval = 10 * 60
+
+    /// Why the readout should be shown as Stale at `now`, or `nil` when it should look
+    /// live. Backing off is rate limiting from the user's point of view, but only once the
+    /// reading is `rateLimitGrace` old (or there is none). Every other reason shows at once.
+    public func staleReason(now: Date) -> StaleReason? {
         switch self {
-        case .stale(_, let reason): return reason
-        case .backingOff: return .rateLimited
-        case .signedOut, .signingIn, .polling: return nil
+        case .stale(_, let reason):
+            return reason
+        case .backingOff(let snapshot, _, _):
+            guard let snapshot, now.timeIntervalSince(snapshot.fetchedAt) < Self.rateLimitGrace else { return .rateLimited }
+            return nil
+        case .signedOut, .signingIn, .polling:
+            return nil
         }
     }
 

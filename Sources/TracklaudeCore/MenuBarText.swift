@@ -34,6 +34,9 @@ public enum MenuBarText {
         case .stale(let snapshot, let reason):
             return stale(snapshot, reason, remaining: remaining, now: now)
         case .backingOff(let snapshot, _, _):
+            guard state.staleReason(now: now) != nil else {
+                return MenuBarLabel(text: render(window: snapshot?.fiveHour, remaining: remaining, now: now), isDimmed: false)
+            }
             return stale(snapshot, .rateLimited, remaining: remaining, now: now)
         }
     }

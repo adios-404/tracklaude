@@ -2,16 +2,16 @@ import Foundation
 import Testing
 import TracklaudeCore
 
-// Spec › Polling: 60 s → 120 → 240 → capped at 300 s, honouring Retry-After if present.
+// Spec › Polling: 60 s → 120 s, then 120 s again, honouring Retry-After if present.
 
-@Test("consecutive 429s double the delay from 60 s and cap at 300 s")
+@Test("consecutive 429s wait 60 s, then 120 s from then on")
 func backoffDoublesAndCaps() {
     #expect(Backoff.delay(consecutiveRateLimits: 1, retryAfter: nil) == 60)
     #expect(Backoff.delay(consecutiveRateLimits: 2, retryAfter: nil) == 120)
-    #expect(Backoff.delay(consecutiveRateLimits: 3, retryAfter: nil) == 240)
-    // Ticket 13: an 8–10 min lockout with Refresh greyed out read as a hung app.
-    #expect(Backoff.delay(consecutiveRateLimits: 4, retryAfter: nil) == 300)
-    #expect(Backoff.delay(consecutiveRateLimits: 50, retryAfter: nil) == 300)
+    // Ticket 16: refusals without a Retry-After lasted 1–17 min whatever the app's rate, so
+    // a longer wait only delays the first good reading after they stop.
+    #expect(Backoff.delay(consecutiveRateLimits: 3, retryAfter: nil) == 120)
+    #expect(Backoff.delay(consecutiveRateLimits: 50, retryAfter: nil) == 120)
 }
 
 @Test("Retry-After wins over the schedule, whether shorter or longer than the step")
@@ -30,5 +30,6 @@ func nonPositiveRetryAfterUsesSchedule() {
     // eight minutes. The server has not said when to come back, so it is our schedule.
     #expect(Backoff.delay(consecutiveRateLimits: 1, retryAfter: 0) == 60)
     #expect(Backoff.delay(consecutiveRateLimits: 2, retryAfter: 0) == 120)
+    #expect(Backoff.delay(consecutiveRateLimits: 5, retryAfter: 0) == 120)
     #expect(Backoff.delay(consecutiveRateLimits: 1, retryAfter: -10) == 60)
 }

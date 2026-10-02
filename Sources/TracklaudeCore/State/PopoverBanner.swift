@@ -60,6 +60,7 @@ public struct PopoverBanner: Equatable, Sendable {
         case .stale(_, .rateLimited):
             return PopoverBanner(message: rateLimited, action: .retry)
         case .backingOff(_, let until, _):
+            guard state.staleReason(now: now) != nil else { return nil }
             let remaining = until.timeIntervalSince(now)
             let when = remaining > 0 ? "in \(waitText(remaining))." : "now…"
             return PopoverBanner(message: "\(rateLimited) Retrying \(when)", action: nil)

@@ -8,9 +8,10 @@ import Foundation
 /// second-guessing the header in either direction.
 public enum Backoff {
     public static let firstDelay: TimeInterval = 60
-    /// Ticket 13: was 600. A lockout of 8–10 min, with Refresh greyed out throughout,
-    /// read as a hung app; the slowed cadence after a 429 now does the budget-saving.
-    public static let cap: TimeInterval = 300
+    /// Ticket 13 cut it from 600 to 300; ticket 16 to 120. Refusals without a Retry-After
+    /// lasted 1–17 min whatever this app's rate (observed 2026-10-03), so a longer wait only
+    /// delays the first good reading after they stop. A positive Retry-After still wins.
+    public static let cap: TimeInterval = 120
 
     /// - Parameter consecutiveRateLimits: how many 429s in a row this one makes (1-based).
     public static func delay(consecutiveRateLimits: Int, retryAfter: TimeInterval?) -> TimeInterval {

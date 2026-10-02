@@ -55,9 +55,19 @@ func sessionExpired() {
         == PopoverBanner(message: "Your session expired. Sign in again.", action: .signIn))
 }
 
-@Test("backing off shows the countdown and no button: nothing the user does can end a lockout sooner")
+// Ticket 16: no banner while the reading is younger than 10 min.
+private let oldSnapshot = Snapshot(fiveHour: Window(utilization: 42, resetsAt: now), sevenDay: nil, fetchedAt: now.addingTimeInterval(-600))
+
+@Test("a refusal on a reading younger than 10 min shows no banner")
+func bannerQuietWhileFresh() {
+    let state = AppState.backingOff(snapshot, until: now.addingTimeInterval(60), consecutiveRateLimits: 1)
+    #expect(PopoverBanner.render(state: state, now: now) == nil)
+    #expect(PopoverBanner.render(state: state, now: now.addingTimeInterval(599)) == nil)
+}
+
+@Test("backing off on an old reading shows the countdown and no button: nothing the user does can end a lockout sooner")
 func backingOffCountsDown() {
-    let state = AppState.backingOff(snapshot, until: now.addingTimeInterval(299), consecutiveRateLimits: 1)
+    let state = AppState.backingOff(oldSnapshot, until: now.addingTimeInterval(299), consecutiveRateLimits: 1)
     #expect(PopoverBanner.render(state: state, now: now)
         == PopoverBanner(message: "Anthropic is rate-limiting usage checks. Retrying in 4 min 59 s.", action: nil))
     #expect(PopoverBanner.render(state: state, now: now.addingTimeInterval(240))?.message
@@ -66,7 +76,7 @@ func backingOffCountsDown() {
 
 @Test("once the lockout has passed the banner says the retry is under way")
 func backingOffElapsed() {
-    let state = AppState.backingOff(snapshot, until: now, consecutiveRateLimits: 1)
+    let state = AppState.backingOff(oldSnapshot, until: now, consecutiveRateLimits: 1)
     #expect(PopoverBanner.render(state: state, now: now)?.message == "Anthropic is rate-limiting usage checks. Retrying now…")
 }
 

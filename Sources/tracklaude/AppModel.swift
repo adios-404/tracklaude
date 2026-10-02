@@ -145,7 +145,7 @@ final class AppModel {
             // Why: the default tolerance lets the system coalesce timers and measured ~4 %
             // late (≈ 31 s cadence). The only error `sleep` throws is cancellation, handled
             // by the guard below. Sleeping in ≤ 30 s chunks keeps the menu-bar clock moving
-            // through a backoff of up to 5 min.
+            // through a backoff of up to 2 min.
             var remaining = delay
             while remaining > 0 {
                 let chunk = min(remaining, PollScheduler.interval)

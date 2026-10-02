@@ -120,7 +120,7 @@ struct PopoverView: View {
                     snapshot: snapshot, remaining: model.showsRemaining, now: now,
                     locale: .autoupdatingCurrent, timeZone: .autoupdatingCurrent
                 ),
-                isStale: model.state.staleReason != nil
+                isStale: model.state.staleReason(now: now) != nil
             )
         } else if case .polling = model.state {
             Text("Fetching usage…")

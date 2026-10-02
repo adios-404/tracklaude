@@ -25,10 +25,13 @@ enforced by a test that runs on every push or is pointed at the source lines you
 - **Footer:** last-updated age, Refresh, Launch at Login, Alerts, Sign out, Quit.
 
 It polls every 30 s while your Mac is awake, pauses during sleep, and fetches immediately
-on wake and when you open the popover. Anthropic allows only about 20–25 usage checks per
-10 minutes per account, shared with anything else that asks — so when it answers 429
-("too many requests"), tracklaude waits (1, 2, 4, then at most 5 minutes, Refresh greyed
-out meanwhile) and then polls every 2 minutes until 30 minutes pass without another 429.
+on wake and when you open the popover. Anthropic sometimes refuses usage checks
+with 429 ("too many requests") — its budget of about 20–25 checks per 10 minutes is per
+account and shared with anything else that asks, and refusals also come when this app has
+barely asked at all. tracklaude then retries after 1 minute and every 2 minutes after that,
+and keeps to a 2-minute pace until 30 minutes pass without another refusal. The last
+reading stays on screen as it was; `⚠ limited` appears only once that reading is 10
+minutes old.
 
 ## Install
 
