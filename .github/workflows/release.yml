@@ -66,10 +66,13 @@ jobs:
           prerelease=""
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
           # `--notes` is prepended to the generated notes: the run that built this
-          # Release and the hash, so a reader can verify without leaving the page.
+          # Release and the hash, so a reader can verify without leaving the page, and
+          # the first-launch interruptions, so nobody mistakes them for a bad download.
           notes="Built by [run $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) from \`$GITHUB_SHA\`.
 
-          SHA-256: \`$(cut -d' ' -f1 "dist/tracklaude-$GITHUB_REF_NAME.zip.sha256")\` — see README › Verify a release."
+          SHA-256: \`$(cut -d' ' -f1 "dist/tracklaude-$GITHUB_REF_NAME.zip.sha256")\` — see README › Verify a release.
+
+          **First launch of this version:** macOS blocks it once until you approve it (macOS 15 and later: *Open Anyway* in System Settings → Privacy & Security; macOS 14: Control-click → Open), and the Keychain asks for your login password twice. Both are expected for an ad-hoc signed app — see [README › Install]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#install)."
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag --generate-notes --title "$GITHUB_REF_NAME" $prerelease \
             --notes "$notes" \

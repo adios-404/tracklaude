@@ -31,6 +31,16 @@ when you open the popover, and backs off when Anthropic returns 429.
 
 Requires macOS 14 or later.
 
+> **Expect two one-time interruptions, both by design.** Releases are ad-hoc signed and not
+> notarized ([why](#why-there-is-no-notarization)), so:
+> 1. macOS blocks the first launch of each version until you click **Open Anyway** — the
+>    Gatekeeper step below.
+> 2. The Keychain asks for your login password **twice** — on the first launch after you sign
+>    in, and again after each update ([why](#the-password-prompt-on-first-launch-and-after-every-update)).
+>
+> Neither comes back until the next version. Nothing is wrong with your download — you can
+> [check that yourself](#verify-a-release).
+
 ### With Homebrew
 
 ```bash
@@ -40,7 +50,10 @@ brew install adios-404/tap/tracklaude
 Homebrew refuses the download unless it matches the SHA-256 in the cask, which the release
 workflow copies from the Release's own `.sha256` file. Then do the **Gatekeeper step** and
 **Sign in** (steps 4 and 5 below): Homebrew marks the app as downloaded, exactly like a
-browser does, and current Homebrew has no option to skip that. Update with `brew upgrade`.
+browser does, and current Homebrew has no option to skip that. Expect the
+[password prompt](#the-password-prompt-on-first-launch-and-after-every-update) too. Update
+with `brew upgrade`; each new version repeats the Gatekeeper step and the password prompt
+once.
 
 ### From the Release zip
 
@@ -54,9 +67,9 @@ browser does, and current Homebrew has no option to skip that. Update with `brew
      **System Settings → Privacy & Security**, scroll to the notice that tracklaude was
      blocked, and click **Open Anyway**.
 
-   This is a one-time step per download. (The macOS 15+ path is Apple's documented one;
-   this project's own machine runs macOS 26 and the step was not walked through for the
-   README — say so in an issue if the wording is off.)
+   This is a one-time step per version. (The macOS 15+ path was walked through on macOS 26
+   with a Homebrew install of v0.1.0 on 2026-10-03; the macOS 14 path is Apple's documented
+   one and has not been — say so in an issue if the wording is off.)
 5. Click the menu-bar item and **Sign in**. Your default browser opens Anthropic's own
    login page; after you approve, the browser lands on a one-line page served by the app on
    `localhost` and you can close the tab. Nothing is pasted anywhere.
