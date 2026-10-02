@@ -28,3 +28,14 @@ replace that with the brew command first, keep the zip path as the second option
 Hyphenated tags publish as pre-releases; `releases/latest` skips them, so a cask pinned to
 `latest` is safe. Also: the account's usage-endpoint budget is shared with something else
 (ticket 10's findings) — a 429 during your end-to-end is probably not the app.
+
+**2026-10-03 — parked mid-ticket (owner hit usage limit).** Done: `ea658b4`/`ee455cf` pushed,
+CI green (run 37048098501). Tagged `v0.1.0` → Release run 37048260594 green; Release has
+`tracklaude-v0.1.0.zip` + `.sha256` (`6ba3f5e1…dedefa`, matches a local `shasum` of the
+downloaded zip). The tap job opened homebrew-tap PR #1 (hash only, version was already
+0.1.0); the tap's audit passed; merged (squash). So boxes 1, 2, 5 are satisfied.
+Not done: `brew install` / `brew upgrade` — both repos are private, so Homebrew can't
+download the zip. Owner agreed (2026-10-02) to move those two checks into ticket 12, which
+makes the repos public; plan there: brew-install 0.1.0, release v1.0.0, merge the tap PR,
+`brew upgrade`. Remaining for this ticket: tick boxes, move the two checks to 12's
+checklist, set Status done, handoff note on 12.
