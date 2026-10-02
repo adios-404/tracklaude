@@ -72,7 +72,7 @@ jobs:
 
           SHA-256: \`$(cut -d' ' -f1 "dist/tracklaude-$GITHUB_REF_NAME.zip.sha256")\` — see README › Verify a release.
 
-          **First launch of this version:** macOS may block it until you approve it (macOS 15 and later: *Open Anyway* in System Settings → Privacy & Security; macOS 14: Control-click → Open), and the Keychain asks for your login password twice. Both are expected for an ad-hoc signed app — see [README › Install]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#install)."
+          **First launch of this version:** macOS may block it until you approve it (macOS 15 and later: *Open Anyway* in System Settings → Privacy & Security; macOS 14: Control-click → Open), and if you were already signed in, the Keychain asks for your login password twice. Both are expected for an ad-hoc signed app — see [README › Install]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#install)."
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag --generate-notes --title "$GITHUB_REF_NAME" $prerelease \
             --notes "$notes" \

@@ -34,12 +34,14 @@ out meanwhile) and then polls every 2 minutes until 30 minutes pass without anot
 
 Requires macOS 14 or later.
 
-> **Expect two one-time interruptions, both by design.** Releases are ad-hoc signed and not
+> **Expect two interruptions, both by design.** Releases are ad-hoc signed and not
 > notarized ([why](#why-there-is-no-notarization)), so:
 > 1. macOS blocks the first launch until you click **Open Anyway** — the Gatekeeper step
->    below. An update may ask again (upgrading 0.1.0 → 1.0.0 on macOS 26 did not).
-> 2. The Keychain asks for your login password **twice** — on the first launch after you sign
->    in, and again after each update ([why](#the-password-prompt-on-first-launch-and-after-every-update)).
+>    below. An update may ask again (on macOS 26 a fresh install was blocked, the upgrade
+>    from 0.1.0 to 1.0.0 was not).
+> 2. After an update, the new version's first launch asks for your login password **twice**
+>    — the Keychain, not the app ([why](#the-password-prompt-after-every-update)). A first
+>    install and sign-in does not ask.
 >
 > Neither comes back for the same version. Nothing is wrong with your download — you can
 > [check that yourself](#verify-a-release).
@@ -53,10 +55,9 @@ brew install adios-404/tap/tracklaude
 Homebrew refuses the download unless it matches the SHA-256 in the cask, which the release
 workflow copies from the Release's own `.sha256` file. Then do the **Gatekeeper step** and
 **Sign in** (steps 4 and 5 below): Homebrew marks the app as downloaded, exactly like a
-browser does, and current Homebrew has no option to skip that. Expect the
-[password prompt](#the-password-prompt-on-first-launch-and-after-every-update) too. Update
-with `brew upgrade`; a new version repeats the password prompt once and may repeat the
-Gatekeeper step.
+browser does, and current Homebrew has no option to skip that. Update with `brew upgrade`;
+the new version's first launch asks for the
+[password twice](#the-password-prompt-after-every-update) and may repeat the Gatekeeper step.
 
 ### From the Release zip
 
@@ -77,14 +78,18 @@ Gatekeeper step.
    login page; after you approve, the browser lands on a one-line page served by the app on
    `localhost` and you can close the tab. Nothing is pasted anywhere.
 
-### The password prompt on first launch, and after every update
+### The password prompt after every update
 
-On the first launch after sign-in — and again on the first launch of every new version —
-macOS asks for your login password **twice**. This is the Keychain, not the app: releases
-are ad-hoc signed, which means each build has a different code hash, and the Keychain item
-holding your credential is bound to the hash that created it. The first prompt lets the new
-build read the item, the second adds the new build to the item's access list. Enter your
-password both times (or click *Always Allow*); the same build never asks again.
+On the first launch of every new version, if you are signed in, macOS asks for your login
+password **twice**. This is the Keychain, not the app: releases are ad-hoc signed, which
+means each build has a different code hash, and the Keychain item holding your credential is
+bound to the hash that created it. The first prompt lets the new build read the item, the
+second adds the new build to the item's access list. Enter your password both times (or
+click *Always Allow*); the same build never asks again, but *Always Allow* does not carry
+over to the next version. A first sign-in does not ask at all — the build that creates the
+item is already on its list. (Counted from the system log on 2026-10-03: two prompts on the
+first launch of 0.1.0 and again of 1.0.0 with an existing sign-in, none for a fresh install
+of 1.0.1 through sign-in, Sign out and sign-in again.)
 
 We accept this cost deliberately. The alternative — signing every release with a private key
 held in CI — would give the app a stable identity at the price of asking you to trust that
@@ -234,7 +239,7 @@ Keychain or your usage.
 ### Stop the Keychain prompt during development
 
 Every rebuild is a new ad-hoc code hash, so every rebuild asks for your password twice (see
-[above](#the-password-prompt-on-first-launch-and-after-every-update)). To give your local
+[above](#the-password-prompt-after-every-update)). To give your local
 builds a stable identity, create a self-signed code-signing certificate once and sign with
 it:
 
