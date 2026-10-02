@@ -4,13 +4,13 @@
 
 **Blocked by:** 10 Release pipeline and README
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-03, commits ea658b4, ee455cf, b72a50b; Release v0.1.0; homebrew-tap PR #1) — install/upgrade checks moved to 12
 
-- [ ] Tap repo exists with a cask that passes `brew audit --cask`
-- [ ] Release workflow opens the bump PR automatically (needs a token with write access to the tap repo, stored as a repository secret — set up via `/wizard` if the user has to do it)
-- [ ] `brew install adios-404/tap/tracklaude` on this machine installs and launches the app
-- [ ] `brew upgrade` after a second test release moves to the new version
-- [ ] README's install section shows the brew command first
+- [x] Tap repo exists with a cask that passes `brew audit --cask`
+- [x] Release workflow opens the bump PR automatically (needs a token with write access to the tap repo, stored as a repository secret — set up via `/wizard` if the user has to do it)
+- [ ] ~~`brew install adios-404/tap/tracklaude` on this machine installs and launches the app~~ → moved to 12 (needs public repos)
+- [ ] ~~`brew upgrade` after a second test release moves to the new version~~ → moved to 12 (0.1.0 → 1.0.0)
+- [x] README's install section shows the brew command first
 
 ## Comments
 
@@ -39,3 +39,16 @@ download the zip. Owner agreed (2026-10-02) to move those two checks into ticket
 makes the repos public; plan there: brew-install 0.1.0, release v1.0.0, merge the tap PR,
 `brew upgrade`. Remaining for this ticket: tick boxes, move the two checks to 12's
 checklist, set Status done, handoff note on 12.
+
+**2026-10-03 — closed.** Deviation from the spec: the two `brew` end-to-end boxes could not
+run here. Both `adios-404/tracklaude` and `adios-404/homebrew-tap` are private, and Homebrew
+fetches the cask's `url` with a plain unauthenticated download, which GitHub answers with
+404 for a private repo's release asset. Rather than pull ticket 12's go-public step forward,
+the owner chose to verify them in 12. Everything else is verified on the real pipeline:
+`v0.1.0` tag → Release run 37048260594 (build, trust checks, archive round-trip, publish) →
+tap job read the hash from the published `.sha256` and opened homebrew-tap PR #1 → tap
+audit green → merged. The cask's pre-filled hash (`112050…9219`) was a local build's; the
+bump replaced it with the CI build's, which is the point of reading it from the Release.
+For 12: the tap must go public too, not just the app repo, or `brew tap` fails for anyone
+without access. The `TAP_GITHUB_TOKEN` secret is set (2026-10-02) and expires —
+`Scripts/setup-tap-token.sh` re-creates it.
