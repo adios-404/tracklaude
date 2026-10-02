@@ -24,8 +24,11 @@ enforced by a test that runs on every push or is pointed at the source lines you
   click.
 - **Footer:** last-updated age, Refresh, Launch at Login, Alerts, Sign out, Quit.
 
-It polls while your Mac is awake, pauses during sleep, fetches immediately on wake and
-when you open the popover, and backs off when Anthropic returns 429.
+It polls every 30 s while your Mac is awake, pauses during sleep, and fetches immediately
+on wake and when you open the popover. Anthropic allows only about 20–25 usage checks per
+10 minutes per account, shared with anything else that asks — so when it answers 429
+("too many requests"), tracklaude waits (1, 2, 4, then at most 5 minutes, Refresh greyed
+out meanwhile) and then polls every 2 minutes until 30 minutes pass without another 429.
 
 ## Install
 
@@ -33,12 +36,12 @@ Requires macOS 14 or later.
 
 > **Expect two one-time interruptions, both by design.** Releases are ad-hoc signed and not
 > notarized ([why](#why-there-is-no-notarization)), so:
-> 1. macOS blocks the first launch of each version until you click **Open Anyway** — the
->    Gatekeeper step below.
+> 1. macOS blocks the first launch until you click **Open Anyway** — the Gatekeeper step
+>    below. An update may ask again (upgrading 0.1.0 → 1.0.0 on macOS 26 did not).
 > 2. The Keychain asks for your login password **twice** — on the first launch after you sign
 >    in, and again after each update ([why](#the-password-prompt-on-first-launch-and-after-every-update)).
 >
-> Neither comes back until the next version. Nothing is wrong with your download — you can
+> Neither comes back for the same version. Nothing is wrong with your download — you can
 > [check that yourself](#verify-a-release).
 
 ### With Homebrew
@@ -52,8 +55,8 @@ workflow copies from the Release's own `.sha256` file. Then do the **Gatekeeper 
 **Sign in** (steps 4 and 5 below): Homebrew marks the app as downloaded, exactly like a
 browser does, and current Homebrew has no option to skip that. Expect the
 [password prompt](#the-password-prompt-on-first-launch-and-after-every-update) too. Update
-with `brew upgrade`; each new version repeats the Gatekeeper step and the password prompt
-once.
+with `brew upgrade`; a new version repeats the password prompt once and may repeat the
+Gatekeeper step.
 
 ### From the Release zip
 
@@ -67,7 +70,7 @@ once.
      **System Settings → Privacy & Security**, scroll to the notice that tracklaude was
      blocked, and click **Open Anyway**.
 
-   This is a one-time step per version. (The macOS 15+ path was walked through on macOS 26
+   This is a one-time step (an update may ask again). (The macOS 15+ path was walked through on macOS 26
    with a Homebrew install of v0.1.0 on 2026-10-03; the macOS 14 path is Apple's documented
    one and has not been — say so in an issue if the wording is off.)
 5. Click the menu-bar item and **Sign in**. Your default browser opens Anthropic's own

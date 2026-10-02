@@ -9,6 +9,7 @@ private func next(
     _ state: PollState,
     lastFetch: TimeInterval?,
     lastManualRefresh: TimeInterval? = nil,
+    lastRateLimit: TimeInterval? = nil,
     trigger: PollTrigger
 ) -> Date? {
     PollScheduler.nextFetch(
@@ -16,6 +17,7 @@ private func next(
         now: now,
         lastFetch: lastFetch.map { now.addingTimeInterval($0) },
         lastManualRefresh: lastManualRefresh.map { now.addingTimeInterval($0) },
+        lastRateLimit: lastRateLimit.map { now.addingTimeInterval($0) },
         trigger: trigger
     )
 }
@@ -106,4 +108,30 @@ func refreshDisabledWhileBackingOff() {
     #expect(PollScheduler.isManualRefreshAllowed(state: .backingOff(until: now.addingTimeInterval(1)), now: now, lastManualRefresh: nil) == false)
     #expect(PollScheduler.isManualRefreshAllowed(state: .active, now: now, lastManualRefresh: nil) == true)
     #expect(PollScheduler.isManualRefreshAllowed(state: .active, now: now, lastManualRefresh: now.addingTimeInterval(-1)) == false)
+}
+
+// Ticket 13: the usage endpoint's budget (~20–25 requests per 10 min) is per account and
+// shared; at 30 s this app alone spends 20. Observed 2026-10-02: snapping back to 30 s
+// after one success drew the next 429 within a minute, for hours.
+
+@Test("for 30 min after a 429 the cadence is 120 s, not 30 s")
+func cadenceSlowsAfterRateLimit() {
+    #expect(next(.active, lastFetch: 0, lastRateLimit: -60, trigger: .timer) == now.addingTimeInterval(120))
+    #expect(next(.active, lastFetch: -12, lastRateLimit: -(30 * 60 - 1), trigger: .timer) == now.addingTimeInterval(108))
+}
+
+@Test("30 min after the last 429 the cadence is back to 30 s")
+func cadenceRecoversAfterQuietPeriod() {
+    #expect(next(.active, lastFetch: 0, lastRateLimit: -30 * 60, trigger: .timer) == now.addingTimeInterval(30))
+    #expect(next(.active, lastFetch: 0, lastRateLimit: -7200, trigger: .timer) == now.addingTimeInterval(30))
+}
+
+@Test("the slower cadence never delays a fetch the user asked for", arguments: [PollTrigger.wake, .popoverOpened, .manualRefresh])
+func slowCadenceKeepsUserTriggersImmediate(trigger: PollTrigger) {
+    #expect(next(.active, lastFetch: -2, lastRateLimit: -60, trigger: trigger) == now)
+}
+
+@Test("a Refresh inside its 5 s cooldown during the slowdown keeps the slowed slot")
+func manualCooldownDuringSlowdown() {
+    #expect(next(.active, lastFetch: -1, lastManualRefresh: -1, lastRateLimit: -60, trigger: .manualRefresh) == now.addingTimeInterval(119))
 }

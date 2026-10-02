@@ -22,12 +22,18 @@ public enum PollTrigger: Equatable, Sendable, CaseIterable {
 }
 
 /// Decides when the next usage fetch happens. Pure: (state, now, last fetch, last manual
-/// Refresh, trigger) in, a Date out — `nil` means "do not fetch". The executable owns the
-/// actual timer.
+/// Refresh, last 429, trigger) in, a Date out — `nil` means "do not fetch". The executable
+/// owns the actual timer.
 public enum PollScheduler {
-    /// 30 s flat (spec › Polling). Ticket 03 measured the endpoint reflecting new usage at
-    /// ≤ 10 s, so the interval is not coarser than the data.
+    /// While no 429 is recent (spec › Polling). Ticket 03 measured the endpoint reflecting
+    /// new usage at ≤ 10 s, so the interval is not coarser than the data.
     public static let interval: TimeInterval = 30
+    /// The cadence for `slowdownPeriod` after any 429 (ticket 13). The usage endpoint's
+    /// budget — about 20–25 requests per 10 min — is per account and shared with whatever
+    /// else asks; at 30 s this app alone spends 20. Snapping back to 30 s after one success
+    /// drew the next 429 within a minute, for hours (observed 2026-10-02). 120 s spends 5.
+    public static let rateLimitedInterval: TimeInterval = 120
+    public static let slowdownPeriod: TimeInterval = 30 * 60
     /// A double-click on Refresh must not double-fetch; the button is disabled this long
     /// after a manual Refresh. Why not after *any* fetch: opening the popover fetches too,
     /// and a Refresh button that is grey every time the popover appears reads as broken
@@ -39,8 +45,10 @@ public enum PollScheduler {
         now: Date,
         lastFetch: Date?,
         lastManualRefresh: Date?,
+        lastRateLimit: Date?,
         trigger: PollTrigger
     ) -> Date? {
+        let cadence = cadence(now: now, lastRateLimit: lastRateLimit)
         switch state {
         case .signedOut, .asleep:
             return nil
@@ -52,11 +60,11 @@ public enum PollScheduler {
         case .active:
             switch trigger {
             case .timer:
-                return cadenceSlot(after: lastFetch, now: now)
+                return cadenceSlot(after: lastFetch, now: now, cadence: cadence)
             case .manualRefresh:
                 return isManualRefreshAllowed(state: state, now: now, lastManualRefresh: lastManualRefresh)
                     ? now
-                    : cadenceSlot(after: lastFetch, now: now)
+                    : cadenceSlot(after: lastFetch, now: now, cadence: cadence)
             case .wake, .popoverOpened:
                 return now
             }
@@ -70,9 +78,16 @@ public enum PollScheduler {
         return now.timeIntervalSince(lastManualRefresh) >= manualCooldown
     }
 
-    /// The regular slot: 30 s after the last fetch, never in the past.
-    private static func cadenceSlot(after lastFetch: Date?, now: Date) -> Date {
+    /// The regular interval: slowed while a 429 is recent, 30 s otherwise. Only the timer
+    /// slows; wake, popover open and Refresh are the user asking, and still fetch at once.
+    private static func cadence(now: Date, lastRateLimit: Date?) -> TimeInterval {
+        guard let lastRateLimit, now.timeIntervalSince(lastRateLimit) < slowdownPeriod else { return interval }
+        return rateLimitedInterval
+    }
+
+    /// The regular slot: one cadence after the last fetch, never in the past.
+    private static func cadenceSlot(after lastFetch: Date?, now: Date, cadence: TimeInterval) -> Date {
         guard let lastFetch else { return now }
-        return max(lastFetch.addingTimeInterval(interval), now)
+        return max(lastFetch.addingTimeInterval(cadence), now)
     }
 }

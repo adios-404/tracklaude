@@ -18,6 +18,9 @@ final class AppModel {
     private(set) var lastFetch: Date?
     /// Drives the Refresh button's 5 s cooldown; automatic fetches do not touch it.
     private(set) var lastManualRefresh: Date?
+    /// When the last 429 landed: the scheduler slows the timer for a while after it
+    /// (ticket 13). Kept across Sign out — the rate budget is the account's, not the session's.
+    private var lastRateLimit: Date?
     /// The clock the menu bar renders with. Advanced on every fetch and at least every 30 s
     /// through a long backoff, so Time-to-Reset never lags the wall clock by more than one
     /// interval. The popover ticks its own clock once a second while open.
@@ -131,7 +134,7 @@ final class AppModel {
         let now = Date()
         guard let next = PollScheduler.nextFetch(
             state: pollState, now: now, lastFetch: lastFetch,
-            lastManualRefresh: lastManualRefresh, trigger: trigger
+            lastManualRefresh: lastManualRefresh, lastRateLimit: lastRateLimit, trigger: trigger
         ) else { return }
         let delay = next.timeIntervalSince(now)
         guard delay > 0 else {
@@ -142,7 +145,7 @@ final class AppModel {
             // Why: the default tolerance lets the system coalesce timers and measured ~4 %
             // late (≈ 31 s cadence). The only error `sleep` throws is cancellation, handled
             // by the guard below. Sleeping in ≤ 30 s chunks keeps the menu-bar clock moving
-            // through a backoff of up to 10 min.
+            // through a backoff of up to 5 min.
             var remaining = delay
             while remaining > 0 {
                 let chunk = min(remaining, PollScheduler.interval)
@@ -203,6 +206,7 @@ final class AppModel {
         guard state.isSignedIn else { return }
         if case .failed(let failure) = result {
             Self.pollLog.error("Usage fetch failed: \(String(describing: failure))")
+            if case .rateLimited = failure { lastRateLimit = Date() }
         }
         if case .snapshot(let fresh) = result {
             let decision = AlertDecision.decide(previous: alertState, snapshot: fresh)

@@ -114,7 +114,7 @@ and is built, tested and released from public source by CI so anyone can verify 
 ### Polling
 
 - 30 s flat while in `polling`. Timer suspended on sleep (`NSWorkspace.willSleepNotification`), immediate fetch on wake and on popover open; manual Refresh fetches immediately with a 5 s cooldown.
-- On HTTP 429: enter `backingOff` with exponential delay 60 s → 120 → 240 → capped at 600 s, honouring a positive `Retry-After` when sent (a `Retry-After: 0` was observed 2026-09-17 and must not be taken literally — it would retry instantly); any success returns to 30 s.
+- On HTTP 429: enter `backingOff` with exponential delay 60 s → 120 → 240 → capped at ~~600~~ 300 s, honouring a positive `Retry-After` when sent (a `Retry-After: 0` was observed 2026-09-17 and must not be taken literally — it would retry instantly); ~~any success returns to 30 s~~. *Revised by ticket 13 (2026-10-03):* the cap is 300 s, and for 30 min after the last 429 the timer cadence is 120 s instead of 30 s (wake, popover open and Refresh still fetch at once). The budget is ~20–25 requests / 10 min per account and shared; 30 s alone spends 20, and snapping back to it drew a 429 within a minute for hours.
 - On network failure: `stale(.offline)`, keep polling at 30 s.
 - On 5xx or undecodable body: `stale(.serverError)`, keep polling.
 - Ticket #1 measures how quickly the endpoint reflects new messages; if it proves coarser than 30 s this section's interval is revisited, not the architecture.

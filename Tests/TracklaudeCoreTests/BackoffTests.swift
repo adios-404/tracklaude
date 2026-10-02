@@ -2,16 +2,16 @@ import Foundation
 import Testing
 import TracklaudeCore
 
-// Spec › Polling: 60 s → 120 → 240 → capped at 600 s, honouring Retry-After if present.
+// Spec › Polling: 60 s → 120 → 240 → capped at 300 s, honouring Retry-After if present.
 
-@Test("consecutive 429s double the delay from 60 s and cap at 600 s")
+@Test("consecutive 429s double the delay from 60 s and cap at 300 s")
 func backoffDoublesAndCaps() {
     #expect(Backoff.delay(consecutiveRateLimits: 1, retryAfter: nil) == 60)
     #expect(Backoff.delay(consecutiveRateLimits: 2, retryAfter: nil) == 120)
     #expect(Backoff.delay(consecutiveRateLimits: 3, retryAfter: nil) == 240)
-    #expect(Backoff.delay(consecutiveRateLimits: 4, retryAfter: nil) == 480)
-    #expect(Backoff.delay(consecutiveRateLimits: 5, retryAfter: nil) == 600)
-    #expect(Backoff.delay(consecutiveRateLimits: 50, retryAfter: nil) == 600)
+    // Ticket 13: an 8–10 min lockout with Refresh greyed out read as a hung app.
+    #expect(Backoff.delay(consecutiveRateLimits: 4, retryAfter: nil) == 300)
+    #expect(Backoff.delay(consecutiveRateLimits: 50, retryAfter: nil) == 300)
 }
 
 @Test("Retry-After wins over the schedule, whether shorter or longer than the step")
