@@ -1,3 +1,5 @@
+<img src="docs/icon.png" alt="tracklaude's icon: a dial with its needle at 70 percent" width="128" align="right">
+
 # tracklaude
 
 A macOS menu-bar app that shows how much of your Claude rate limits you have used and when
@@ -25,7 +27,7 @@ enforced by a test that runs on every push or is pointed at the source lines you
 - **Footer:** last-updated age, Refresh, Launch at Login, Alerts, Sign out, Quit.
 
 It polls every 30 s while your Mac is awake, pauses during sleep, and fetches immediately
-on wake and when you open the popover. Anthropic sometimes refuses usage checks
+on wake. Opening the popover shows the last reading without asking again; Refresh asks. Anthropic sometimes refuses usage checks
 with 429 ("too many requests") — its budget of about 20–25 checks per 10 minutes is per
 account and shared with anything else that asks, and refusals also come when this app has
 barely asked at all. tracklaude then retries after 1 minute and every 2 minutes after that,

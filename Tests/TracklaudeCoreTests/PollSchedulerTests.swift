@@ -47,19 +47,13 @@ func overdueSlotFetchesNow() {
 @Test("while the Mac sleeps no fetch is scheduled, even an overdue one")
 func sleepSuspendsTheTimer() {
     #expect(next(.asleep, lastFetch: -45, trigger: .timer) == nil)
-    #expect(next(.asleep, lastFetch: -45, trigger: .popoverOpened) == nil)
+    #expect(next(.asleep, lastFetch: -45, trigger: .wake) == nil)
 }
 
 @Test("waking fetches immediately regardless of how recent the last fetch was")
 func wakeFetchesNow() {
     #expect(next(.active, lastFetch: -2, trigger: .wake) == now)
     #expect(next(.active, lastFetch: -3600, trigger: .wake) == now)
-}
-
-@Test("opening the popover fetches immediately")
-func popoverOpenFetchesNow() {
-    #expect(next(.active, lastFetch: -2, trigger: .popoverOpened) == now)
-    #expect(next(.active, lastFetch: nil, trigger: .popoverOpened) == now)
 }
 
 @Test("manual Refresh fetches immediately once the 5 s cooldown has passed")
@@ -77,7 +71,7 @@ func manualRefreshInsideCooldown() {
 
 @Test("the cooldown counts from the last manual Refresh, not from a fetch the popover or timer issued")
 func cooldownIgnoresAutomaticFetches() {
-    // The popover just opened and fetched; Refresh is still usable at once.
+    // The timer just fetched; Refresh is still usable at once.
     #expect(next(.active, lastFetch: -0.5, lastManualRefresh: nil, trigger: .manualRefresh) == now)
     #expect(next(.active, lastFetch: -0.5, lastManualRefresh: -60, trigger: .manualRefresh) == now)
 }
@@ -126,7 +120,7 @@ func cadenceRecoversAfterQuietPeriod() {
     #expect(next(.active, lastFetch: 0, lastRateLimit: -7200, trigger: .timer) == now.addingTimeInterval(30))
 }
 
-@Test("the slower cadence never delays a fetch the user asked for", arguments: [PollTrigger.wake, .popoverOpened, .manualRefresh])
+@Test("the slower cadence never delays a fetch the user asked for", arguments: [PollTrigger.wake, .manualRefresh])
 func slowCadenceKeepsUserTriggersImmediate(trigger: PollTrigger) {
     #expect(next(.active, lastFetch: -2, lastRateLimit: -60, trigger: trigger) == now)
 }

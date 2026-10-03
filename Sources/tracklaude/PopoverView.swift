@@ -34,8 +34,10 @@ struct PopoverView: View {
         .padding(12)
         .frame(width: Self.width)
         // MenuBarExtra rebuilds the content view on each open, so this fires per open.
+        // Why no fetch here (ticket 17): the reading is at most 30 s old, every open spent a
+        // request from a budget that refuses checks anyway, and a refusal landing as the
+        // popover opened was what the owner kept seeing. Refresh is the explicit way.
         .onAppear {
-            model.poll(.popoverOpened)
             model.refreshAlertPermission()
             model.refreshLaunchAtLogin()
         }

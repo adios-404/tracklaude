@@ -127,7 +127,7 @@ final class AppModel {
     }
 
     /// Re-plans the next fetch for `trigger`: right now, at a later slot, or not at all.
-    /// Every entry point into polling — sign-in, wake, popover open, Refresh, a finished
+    /// Every entry point into polling — sign-in, wake, Refresh, a finished
     /// fetch — goes through here so the pure scheduler is the only cadence rule.
     func poll(_ trigger: PollTrigger) {
         cancelTimer()
@@ -172,7 +172,7 @@ final class AppModel {
     }
 
     private func startFetch(_ trigger: PollTrigger) {
-        // Why: one request in flight at a time. A popover open during a fetch rides on the
+        // Why: one request in flight at a time. A Refresh or wake during a fetch rides on the
         // one already running rather than spending rate budget on a duplicate.
         guard fetchTask == nil else { return }
         let issuedAt = Date()

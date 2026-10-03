@@ -17,7 +17,6 @@ public enum PollTrigger: Equatable, Sendable, CaseIterable {
     /// The regular cadence: a fetch just finished, or polling is starting.
     case timer
     case wake
-    case popoverOpened
     case manualRefresh
 }
 
@@ -35,7 +34,7 @@ public enum PollScheduler {
     public static let rateLimitedInterval: TimeInterval = 120
     public static let slowdownPeriod: TimeInterval = 30 * 60
     /// A double-click on Refresh must not double-fetch; the button is disabled this long
-    /// after a manual Refresh. Why not after *any* fetch: opening the popover fetches too,
+    /// after a manual Refresh. Why not after *any* fetch: the timer fetches every 30 s,
     /// and a Refresh button that is grey every time the popover appears reads as broken
     /// (observed 2026-09-16).
     public static let manualCooldown: TimeInterval = 5
@@ -65,7 +64,7 @@ public enum PollScheduler {
                 return isManualRefreshAllowed(state: state, now: now, lastManualRefresh: lastManualRefresh)
                     ? now
                     : cadenceSlot(after: lastFetch, now: now, cadence: cadence)
-            case .wake, .popoverOpened:
+            case .wake:
                 return now
             }
         }
@@ -79,7 +78,7 @@ public enum PollScheduler {
     }
 
     /// The regular interval: slowed while a 429 is recent, 30 s otherwise. Only the timer
-    /// slows; wake, popover open and Refresh are the user asking, and still fetch at once.
+    /// slows; wake and Refresh still fetch at once.
     private static func cadence(now: Date, lastRateLimit: Date?) -> TimeInterval {
         guard let lastRateLimit, now.timeIntervalSince(lastRateLimit) < slowdownPeriod else { return interval }
         return rateLimitedInterval
