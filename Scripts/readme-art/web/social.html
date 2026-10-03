@@ -1,0 +1,81 @@
+<!doctype html>
+<!-- The repository's social-preview card, 1280×640 (GitHub's recommended size), uploaded
+     by hand in Settings › Social preview. ?art=<ReadmeArt output dir>&clock=<clock text> -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="parts.css">
+<style>
+  /* Instrument Sans (SIL OFL, see OFL.txt): the app's own UI is SF, which Apple licenses
+     for interface mock-ups only, so the card's words are set in an open font. */
+  @font-face { font-family: 'Instrument Sans'; src: url('InstrumentSans.ttf'); font-weight: 400 700; font-stretch: 75% 100%; }
+  html, body { margin: 0; background: #0F1B33; }
+  body { width: 1280px; height: 640px; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  .card { position: relative; width: 1280px; height: 640px; overflow: hidden; isolation: isolate; }
+  svg.wall { position: absolute; inset: 0; }
+
+  /* The menu bar and popover at 1.42x, pinned to the top-right corner like a real screen. */
+  .ui { position: absolute; top: 0; right: 0; width: 640px; height: 460px; transform-origin: top right; transform: scale(1.42); }
+
+  .words { position: absolute; left: 84px; top: 0; bottom: 0; width: 520px;
+           display: flex; flex-direction: column; justify-content: center; }
+  .icon { width: 148px; height: 148px; margin: 0 0 6px -16px; }
+  .name { font-family: 'Instrument Sans'; font-weight: 640; font-stretch: 94%; font-size: 112px; line-height: 1;
+          letter-spacing: -0.025em; color: #fff; margin: 0 0 22px -4px; }
+  .line { font-family: 'Instrument Sans'; font-weight: 460; font-size: 36px; line-height: 1.22;
+          letter-spacing: -0.005em; color: rgba(255, 255, 255, 0.86); max-width: 470px; margin: 0; }
+  .line.quiet { margin-top: 18px; font-size: 26px; font-weight: 500; color: #8FE3C3; }
+</style>
+</head>
+<body class="dark">
+<div class="card">
+  <svg class="wall" width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="base" x1="0" y1="0" x2="0.35" y2="1">
+        <stop offset="0" stop-color="#2B4574"/><stop offset="0.6" stop-color="#18294A"/><stop offset="1" stop-color="#0F1B33"/>
+      </linearGradient>
+      <radialGradient id="sheen" cx="0.12" cy="0" r="0.8">
+        <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect width="1280" height="640" fill="url(#base)"/>
+    <rect width="1280" height="640" fill="url(#sheen)"/>
+    <g id="dial"></g>
+  </svg>
+
+  <div class="words">
+    <img class="icon" id="icon" alt="">
+    <div class="name">tracklaude</div>
+    <p class="line">Your Claude usage limits, live in the Mac menu bar.</p>
+    <p class="line quiet">Open source. Talks only to Anthropic.</p>
+  </div>
+
+  <div class="ui">
+    <div id="menubar"></div>
+    <div class="panel" id="panel"><img data-src="popover"></div>
+  </div>
+</div>
+<script src="parts.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  document.getElementById('icon').src = params.get('icon');
+  document.getElementById('menubar').outerHTML = menuBarHTML(params.get('clock') || '');
+  const scale = 1.42;
+
+  loadArt(params.get('art'), 'dark').then(() => {
+    // Measured in page space, set in the scaled .ui's own units.
+    const ui = document.querySelector('.ui').getBoundingClientRect();
+    const pill = document.getElementById('pill').getBoundingClientRect();
+    const panel = document.getElementById('panel');
+    panel.style.left = `${Math.round((pill.left - ui.left) / scale - 4)}px`;
+    const box = panel.getBoundingClientRect();
+    // Why off-centre: centred under the popover, the arc's left leg ran through the words.
+    drawDial(document.getElementById('dial'), {
+      cx: box.left + box.width / 2 + 40, cy: 640 + 110, r: 310 * scale, width: 26 * scale,
+      dark: true, glow: 0.42, tickGap: 20, tickLength: [15, 28], tickWidth: [3.5, 5],
+    });
+    document.title = 'ready';
+  }, error => { document.title = `error: ${error.message}`; });
+</script>
+</body>
+</html>

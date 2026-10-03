@@ -41,7 +41,7 @@ else
                 -Xswiftc -Xfrontend -Xswiftc -disable-cross-import-overlays
 endif
 
-.PHONY: all build test bundle sign install run clean trust zip icon
+.PHONY: all build test bundle sign install run clean trust zip icon readme-art
 
 all: build
 
@@ -68,6 +68,12 @@ icon:
 	mkdir -p "$(DIST_DIR)/AppIcon.iconset"
 	swift Scripts/render-icon.swift "$(DIST_DIR)/AppIcon.iconset" docs/icon.png
 	iconutil -c icns "$(DIST_DIR)/AppIcon.iconset" -o Packaging/AppIcon.icns
+
+# Redraws the README's pictures and the social-preview card (docs/readme/) from the app's
+# own views with a sample reading. Needs Google Chrome; see Scripts/readme-art/README.md.
+# Run it after changing anything the popover or the menu bar shows.
+readme-art:
+	sh Scripts/readme-art/render.sh
 
 sign: bundle
 	codesign --force --sign "$(SIGN_IDENTITY)" --entitlements "$(ENTITLEMENTS)" --identifier "$(BUNDLE_ID)" "$(APP)"

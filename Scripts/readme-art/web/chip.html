@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- One menu-bar state for the README's table: ReadmeArt's item on a strip of wallpaper,
+     at 1.25x so its 13 pt text matches the README's 16 px body text.
+     ?theme=light|dark&state=live|stale|nowindow|signedout&art=<ReadmeArt output dir> -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: transparent; }
+  body { width: 250px; height: 40px; overflow: hidden; }
+  .chip { box-sizing: border-box; width: 250px; height: 40px; border-radius: 10px; display: flex; align-items: center;
+          padding: 0 14px; position: relative; overflow: hidden; }
+  .chip::after { content: ""; position: absolute; inset: 0; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--edge); }
+  .chip img { display: block; }
+  .dark .chip { background: linear-gradient(100deg, #2B4574 0%, #1B2E52 55%, #16264A 100%); --edge: rgba(255, 255, 255, 0.10); }
+  .light .chip { background: linear-gradient(100deg, #F7F9FC 0%, #EBF0F8 60%, #E3EAF4 100%); --edge: rgba(15, 27, 51, 0.10); }
+</style>
+</head>
+<body>
+<div class="chip"><img id="item" alt=""></div>
+<script>
+  const params = new URLSearchParams(location.search);
+  const theme = params.get('theme') || 'dark';
+  document.body.className = theme;
+  const img = document.getElementById('item');
+  img.onload = () => { img.width = img.naturalWidth / 4 * 1.25; img.height = img.naturalHeight / 4 * 1.25; document.title = 'ready'; };
+  img.onerror = () => { document.title = `error: missing ${img.src}`; };
+  img.src = `${params.get('art')}/item-${params.get('state')}-${theme}.png`;
+</script>
+</body>
+</html>

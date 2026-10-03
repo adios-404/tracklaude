@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- The README's hero: tracklaude's menu-bar item, open, over a wallpaper made from the
+     icon's dial. ?theme=light|dark&art=<ReadmeArt output dir>&clock=<menu-bar clock text> -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="parts.css">
+<style>
+  html, body { margin: 0; background: transparent; }
+  body { width: 640px; height: 430px; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  .scene { position: relative; width: 640px; height: 430px; border-radius: 18px; overflow: hidden; isolation: isolate; }
+  /* A hairline inside the rounded corner, so the picture keeps its edge on either page colour. */
+  .scene::after { content: ""; position: absolute; inset: 0; border-radius: 18px; pointer-events: none;
+                  box-shadow: inset 0 0 0 1px var(--edge); }
+  svg.wall { position: absolute; inset: 0; }
+  .dark { --edge: rgba(255, 255, 255, 0.08); }
+  .light { --edge: rgba(15, 27, 51, 0.08); }
+</style>
+</head>
+<body>
+<div class="scene">
+  <svg class="wall" width="640" height="430" viewBox="0 0 640 430" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- The icon's own gradient, dusk at the top to night at the bottom, and its sheen. -->
+      <linearGradient id="base-dark" x1="0" y1="0" x2="0.35" y2="1">
+        <stop offset="0" stop-color="#2B4574"/><stop offset="0.6" stop-color="#18294A"/><stop offset="1" stop-color="#0F1B33"/>
+      </linearGradient>
+      <linearGradient id="base-light" x1="0" y1="0" x2="0.35" y2="1">
+        <stop offset="0" stop-color="#F7F9FC"/><stop offset="0.6" stop-color="#EAF0F8"/><stop offset="1" stop-color="#DFE7F2"/>
+      </linearGradient>
+      <radialGradient id="sheen" cx="0.18" cy="0" r="0.75">
+        <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.12"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <rect id="base" width="640" height="430"/>
+    <rect width="640" height="430" fill="url(#sheen)"/>
+    <g id="dial"></g>
+  </svg>
+  <div id="menubar"></div>
+  <div class="panel" id="panel"><img data-src="popover"></div>
+</div>
+<script src="parts.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const theme = params.get('theme') || 'dark';
+  document.body.className = theme;
+  document.getElementById('base').setAttribute('fill', `url(#base-${theme})`);
+  document.getElementById('menubar').outerHTML = menuBarHTML(params.get('clock') || '');
+
+  loadArt(params.get('art'), theme).then(() => {
+    // The popover hangs from its item, as MenuBarExtra places it; the dial is centred
+    // beneath the popover so the gauge frames it.
+    const pill = document.getElementById('pill').getBoundingClientRect();
+    const panel = document.getElementById('panel');
+    panel.style.left = `${Math.round(pill.left - 4)}px`;
+    const box = panel.getBoundingClientRect();
+    drawDial(document.getElementById('dial'), {
+      cx: box.left + box.width / 2, cy: 430 + 80, r: 352, width: 26,
+      dark: theme === 'dark', glow: theme === 'dark' ? 0.45 : 0.32,
+    });
+    document.title = 'ready';
+  }, error => { document.title = `error: ${error.message}`; });
+</script>
+</body>
+</html>
