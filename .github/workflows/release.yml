@@ -65,14 +65,23 @@ jobs:
         run: |
           prerelease=""
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
-          # `--notes` is prepended to the generated notes: the run that built this
-          # Release and the hash, so a reader can verify without leaving the page, and
-          # the first-launch interruptions, so nobody mistakes them for a bad download.
-          notes="Built by [run $GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) from \`$GITHUB_SHA\`.
+          # `--notes` is prepended to the generated notes. Install comes first, for the
+          # reader who followed the README's download link; then the first-launch
+          # interruptions, so nobody mistakes them for a bad download; then the run that
+          # built this Release and the hash, so a reader can verify without leaving the
+          # page. Commits land on main directly, so the generated part is only the compare
+          # link: add a short "What's new" list above Install by hand after publishing.
+          repo="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          hash="$(cut -d' ' -f1 "dist/tracklaude-$GITHUB_REF_NAME.zip.sha256")"
+          notes="## Install
 
-          SHA-256: \`$(cut -d' ' -f1 "dist/tracklaude-$GITHUB_REF_NAME.zip.sha256")\` — see README › Verify a release.
+          Download \`tracklaude-$GITHUB_REF_NAME.zip\` below, or use Homebrew: \`brew install adios-404/tap/tracklaude\` (\`brew upgrade\` once the tap has this version). Needs an Apple silicon Mac and macOS 14 or later.
 
-          **First launch of this version:** macOS may block it until you approve it (macOS 15 and later: *Open Anyway* in System Settings → Privacy & Security; macOS 14: Control-click → Open), and if you were already signed in, the Keychain asks for your login password twice. Both are expected for an ad-hoc signed app — see [README › Install]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY#install)."
+          **First launch of this version:** macOS may block it until you approve it (macOS 15 and later: *Open Anyway* in System Settings → Privacy & Security; macOS 14: Control-click → Open), and if you were already signed in, the Keychain asks for your login password twice. Both are expected for an ad-hoc signed app; see [README › Install]($repo#install).
+
+          ## Verify
+
+          Built by [run $GITHUB_RUN_ID]($repo/actions/runs/$GITHUB_RUN_ID) from \`$GITHUB_SHA\`. SHA-256 of the zip: \`$hash\`. See [README › Verify a release]($repo#verify-a-release)."
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag --generate-notes --title "$GITHUB_REF_NAME" $prerelease \
             --notes "$notes" \
