@@ -6,7 +6,10 @@ import TracklaudeCore
 struct PopoverView: View {
     @Bindable var model: AppModel
 
-    private static let width: CGFloat = 300
+    /// Why 320 (ticket 18): the footer's one line (age, Refresh, Sign out, Quit at `.small`)
+    /// measured 300.5 pt for "Updated 13 s ago" and 312.5 pt for "Updated 59 min ago", the
+    /// longest it says (2026-10-03). At 300 every age of 10 s or more read "Updated 13 s a…".
+    private static let width: CGFloat = 320
 
     var body: some View {
         // Why: the footer's "Updated N s ago", the Refresh cooldown and the rate-limit
