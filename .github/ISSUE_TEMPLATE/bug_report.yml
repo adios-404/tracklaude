@@ -1,0 +1,109 @@
+name: Bug report
+description: tracklaude shows something wrong, or does not do what the README says.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        For a security problem, do not open an issue.
+        [Report it privately](https://github.com/adios-404/tracklaude/security/advisories/new) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: tracklaude version
+      description: >-
+        The app has no About box. In Terminal, run
+        `defaults read /Applications/tracklaude.app/Contents/Info.plist CFBundleShortVersionString`.
+        With Homebrew, `brew list --cask --versions tracklaude` shows it too.
+        Built from source? Add the commit (`git rev-parse --short HEAD`).
+      placeholder: "1.0.3"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: Apple menu > About This Mac, or `sw_vers -productVersion` in Terminal.
+      placeholder: "15.6"
+    validations:
+      required: true
+
+  - type: input
+    id: mac
+    attributes:
+      label: Mac and chip
+      description: >-
+        tracklaude runs only on Apple silicon: the release binary is arm64.
+        About This Mac shows the chip.
+      placeholder: "MacBook Air, M2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How you installed it
+      options:
+        - Homebrew
+        - Release zip
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: menu-bar
+    attributes:
+      label: What the menu bar shows
+      description: >-
+        Copy the text exactly, including any `⚠` and the word after it.
+        If the app does not appear in the menu bar, say so.
+      placeholder: "42% · 2h14m ⚠ offline"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include any banner the popover shows, word for word.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If you know them.
+      placeholder: |
+        1. Sign in.
+        2. Put the Mac to sleep for an hour.
+        3. Wake it.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: >-
+        Optional. In Terminal, run
+        `/usr/bin/log show --last 30m --predicate 'subsystem == "com.adios404.tracklaude"'`
+        and widen `30m` to cover when it happened. Type `/usr/bin/log` in full: in zsh, the
+        default shell, a bare `log` is a different command. The app strips tokens from its
+        log lines before it writes them, but read what you paste anyway.
+      render: text
+
+  - type: checkboxes
+    id: no-secrets
+    attributes:
+      label: Before you submit
+      options:
+        - label: I have not pasted a token, cookie or password.
+          required: true

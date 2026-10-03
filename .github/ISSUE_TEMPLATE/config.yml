@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/adios-404/tracklaude/security/advisories/new
+    about: Privately, through GitHub. Do not open a public issue for a security problem.
+  - name: How the app handles your sign-in
+    url: https://github.com/adios-404/tracklaude#what-it-holds
+    about: What tracklaude keeps, where it keeps it, and what Sign out deletes.

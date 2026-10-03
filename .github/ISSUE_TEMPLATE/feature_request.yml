@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest something tracklaude should do, or do differently.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        tracklaude is small on purpose, and some requests are out of scope by decision:
+        a second provider, cookie or in-app sign-in, reading Claude Code's credentials,
+        multiple accounts, auto-update, usage history and charts, among others. Check the
+        [out-of-scope list](https://github.com/adios-404/tracklaude/blob/main/.github/CONTRIBUTING.md#out-of-scope)
+        before you ask.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: >-
+        What should tracklaude do instead? Describe what you would see in the menu bar,
+        the popover or a notification.
+    validations:
+      required: true
