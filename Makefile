@@ -41,7 +41,7 @@ else
                 -Xswiftc -Xfrontend -Xswiftc -disable-cross-import-overlays
 endif
 
-.PHONY: all build test bundle sign install run clean trust zip
+.PHONY: all build test bundle sign install run clean trust zip icon
 
 all: build
 
@@ -57,8 +57,17 @@ bundle: build
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(CONTENTS)/MacOS/$(APP_NAME)"
 	sed -e 's/@VERSION@/$(VERSION)/g' -e 's/@BUNDLE_ID@/$(BUNDLE_ID)/g' -e 's/@APP_NAME@/$(APP_NAME)/g' \
 	    Packaging/Info.plist.in > "$(CONTENTS)/Info.plist"
+	cp Packaging/AppIcon.icns "$(CONTENTS)/Resources/AppIcon.icns"
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	@echo "Assembled $(APP) (v$(VERSION))"
+
+# Redraws the app icon (ticket 15) and rebuilds Packaging/AppIcon.icns, which is committed
+# so `bundle` never draws. Run it only after changing Scripts/render-icon.swift.
+icon:
+	rm -rf "$(DIST_DIR)/AppIcon.iconset"
+	mkdir -p "$(DIST_DIR)/AppIcon.iconset"
+	swift Scripts/render-icon.swift "$(DIST_DIR)/AppIcon.iconset" docs/icon.png
+	iconutil -c icns "$(DIST_DIR)/AppIcon.iconset" -o Packaging/AppIcon.icns
 
 sign: bundle
 	codesign --force --sign "$(SIGN_IDENTITY)" --entitlements "$(ENTITLEMENTS)" --identifier "$(BUNDLE_ID)" "$(APP)"
