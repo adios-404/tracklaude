@@ -1,6 +1,6 @@
-<img src="docs/icon.png" alt="tracklaude's icon: a dial with its needle at 70 percent" width="128" align="right">
-
 # tracklaude
+
+<img src="docs/icon.png" alt="tracklaude's icon: a dial with its needle at 70 percent" width="128" align="right">
 
 A macOS menu-bar app that shows how much of your Claude rate limits you have used and when
 they reset. Open source, sandboxed, no auto-updater, talks only to Anthropic.
