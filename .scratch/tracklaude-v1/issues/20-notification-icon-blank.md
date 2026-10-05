@@ -6,11 +6,11 @@ all draw the Dial for `com.adios404.tracklaude`. Seen on macOS 27.0 (26A428), 20
 
 **Blocked by:** none
 
-**Status:** in progress
+**Status:** in progress — fix shipped in v1.0.5, banner not yet confirmed on the owner's Mac
 
-- [ ] The bundle carries `Contents/Resources/Assets.car` with an `AppIcon` app icon, and
+- [x] The bundle carries `Contents/Resources/Assets.car` with an `AppIcon` app icon, and
       `CFBundleIconName = AppIcon` (keeping `CFBundleIconFile` and the .icns)
-- [ ] `Packaging/Assets.car` is compiled from the committed `.icns` by
+- [x] `Packaging/Assets.car` is compiled from the committed `.icns` by
       `Scripts/compile-assets.sh` (`make assets`, or the "Compile Assets.car" workflow,
       since the owner's Mac has no Xcode and so no `actool`)
 - [ ] A banner from the installed release shows the Dial
@@ -31,3 +31,20 @@ Ruled out first, each followed by a test banner that was still blank: restarting
 `Info.plist` keys `UNNotificationIcons…` that NotificationPreferences.framework reads are for
 Apple's own notification bundles only (decompiled `UNCNotificationSourceDescription`), so
 they are not a fix.
+
+**2026-10-06, v1.0.5 shipped, still blank here.** Commits 2029b11, 3e12016, 4d7e20a; tag
+v1.0.5; tap PR #11 merged after its audit passed; `brew upgrade` installed it (Info.plist has
+`CFBundleIconName`, Resources has `Assets.car`; `assetutil --info` lists AppIcon 16–1024 px).
+Test banners, posted by a scratch helper with the same bundle id, were still blank after
+`killall NotificationCenter`, also once the helper itself carried the same catalog. Not yet
+seen: a real Alert from the relaunched 1.0.5 app.
+
+Open candidates, untested:
+1. Notification Center resolves the bundle id to another registered copy (third-party
+   precedent for sounds: YoanWai/agent-manager#490). LaunchServices still lists a broken
+   `dev-build/tracklaude.app` (v0.1, no Info.plist, no Resources) from the 2026-10-03
+   session's scratchpad, and `dist/tracklaude.app`. A missing-sound probe did not log a path.
+2. A stale image in IconServices' root-owned store (`/Library/Caches/com.apple.iconservices.store`):
+   NotificationCenter logs "Persistent store lookup returned found - full match" for the
+   banner. Clearing it needs the owner's admin password.
+3. Both are cleared by a reboot, which has not been tried.
