@@ -319,6 +319,21 @@ No. One account at a time, by design.
 </details>
 
 <details>
+<summary><b>Notifications show a blank icon</b></summary>
+
+<br>
+
+Versions before 1.0.5 had no icon Notification Center could read on macOS 26 and later, and
+macOS keeps the blank one it saved. After updating, clear macOS's icon cache once (asks for
+your password; the Dock flickers while it rebuilds):
+
+```bash
+sudo rm -rf /Library/Caches/com.apple.iconservices.store "$(getconf DARWIN_USER_CACHE_DIR)com.apple.iconservices" && sudo killall iconservicesd iconservicesagent; killall Dock NotificationCenter
+```
+
+</details>
+
+<details>
 <summary><b>How do I remove it completely?</b></summary>
 
 <br>
