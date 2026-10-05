@@ -340,7 +340,13 @@ open /Applications/tracklaude.app
 ```
 
 Other targets: `make build`, `make test`, `make bundle`, `make sign`, `make trust`,
-`make zip`, `make run`, `make clean`, `make icon`, `make readme-art`.
+`make zip`, `make run`, `make clean`, `make icon`, `make assets`, `make readme-art`.
+
+The icon ships twice: `Packaging/AppIcon.icns`, and `Packaging/Assets.car`, the asset
+catalog Notification Center needs from macOS 26 (without it every banner shows a blank
+icon). Both are committed. `make assets` rebuilds the catalog but needs Xcode's `actool`;
+without Xcode, run the **Compile Assets.car** workflow on GitHub after `make icon` and
+commit its artefact.
 
 ### Tests
 

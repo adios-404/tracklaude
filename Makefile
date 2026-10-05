@@ -58,6 +58,9 @@ bundle: build
 	sed -e 's/@VERSION@/$(VERSION)/g' -e 's/@BUNDLE_ID@/$(BUNDLE_ID)/g' -e 's/@APP_NAME@/$(APP_NAME)/g' \
 	    Packaging/Info.plist.in > "$(CONTENTS)/Info.plist"
 	cp Packaging/AppIcon.icns "$(CONTENTS)/Resources/AppIcon.icns"
+	# Why both: Notification Center (macOS 26+) reads only the catalog CFBundleIconName names;
+	# CFBundleIconFile's .icns stays for everything that still reads it. See `assets`.
+	cp Packaging/Assets.car "$(CONTENTS)/Resources/Assets.car"
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	@echo "Assembled $(APP) (v$(VERSION))"
 
