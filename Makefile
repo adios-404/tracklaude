@@ -41,7 +41,7 @@ else
                 -Xswiftc -Xfrontend -Xswiftc -disable-cross-import-overlays
 endif
 
-.PHONY: all build test bundle sign install run clean trust zip icon readme-art
+.PHONY: all build test bundle sign install run clean trust zip icon assets readme-art
 
 all: build
 
@@ -68,6 +68,12 @@ icon:
 	mkdir -p "$(DIST_DIR)/AppIcon.iconset"
 	swift Scripts/render-icon.swift "$(DIST_DIR)/AppIcon.iconset" docs/icon.png
 	iconutil -c icns "$(DIST_DIR)/AppIcon.iconset" -o Packaging/AppIcon.icns
+
+# Recompiles Packaging/Assets.car (the icon as an asset catalog, which Notification Center
+# needs from macOS 26) from Packaging/AppIcon.icns. Needs Xcode's actool; without Xcode, run
+# the "Compile Assets.car" GitHub workflow instead. Committed, so `bundle` never compiles.
+assets:
+	sh Scripts/compile-assets.sh
 
 # Redraws the README's pictures and the social-preview card (docs/readme/) from the app's
 # own views with a sample reading. Needs Google Chrome; see Scripts/readme-art/README.md.
